@@ -106,8 +106,8 @@ async function fetchIrisPrices(identifiers: string[]): Promise<number[]> {
 }
 
 function matchesToken(pool: any, policyId: string): boolean {
-  const tokenA = pool.pair?.tokenA;
-  const tokenB = pool.pair?.tokenB;
+  const tokenA = pool.tokenA;
+  const tokenB = pool.tokenB;
   return tokenA?.policyId === policyId || tokenB?.policyId === policyId;
 }
 
