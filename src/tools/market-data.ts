@@ -114,10 +114,7 @@ export function registerMarketDataTools(server: McpServer): void {
 
       const buyTrades = limitedTrades.filter((t) => t.side === 'buy');
       const sellTrades = limitedTrades.filter((t) => t.side === 'sell');
-      const totalVolume = limitedTrades.reduce(
-        (sum, trade) => sum + trade.price * trade.amount,
-        0
-      );
+      const totalVolume = limitedTrades.reduce((sum, trade) => sum + trade.price * trade.amount, 0);
 
       return {
         content: [

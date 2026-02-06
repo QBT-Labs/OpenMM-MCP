@@ -44,12 +44,7 @@ describe('MCP Resources', () => {
 
       const data = JSON.parse(textContent(result.contents).text);
       expect(data.exchanges).toHaveLength(4);
-      expect(data.exchanges.map((e: any) => e.id)).toEqual([
-        'mexc',
-        'bitget',
-        'gateio',
-        'kraken',
-      ]);
+      expect(data.exchanges.map((e: any) => e.id)).toEqual(['mexc', 'bitget', 'gateio', 'kraken']);
     });
 
     it('should include credential requirements for each exchange', async () => {

@@ -1,11 +1,30 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-const SUPPORTED_TOKENS: Record<string, { policyId: string; assetName: string; minLiquidity: number }> = {
-  INDY: { policyId: '533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0', assetName: '494e4459', minLiquidity: 100000 },
-  SNEK: { policyId: '279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f', assetName: '534e454b', minLiquidity: 50000 },
-  NIGHT: { policyId: '0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa', assetName: '4e49474854', minLiquidity: 25000 },
-  MIN: { policyId: '29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6', assetName: '4d494e', minLiquidity: 100000 },
+const SUPPORTED_TOKENS: Record<
+  string,
+  { policyId: string; assetName: string; minLiquidity: number }
+> = {
+  INDY: {
+    policyId: '533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0',
+    assetName: '494e4459',
+    minLiquidity: 100000,
+  },
+  SNEK: {
+    policyId: '279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f',
+    assetName: '534e454b',
+    minLiquidity: 50000,
+  },
+  NIGHT: {
+    policyId: '0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa',
+    assetName: '4e49474854',
+    minLiquidity: 25000,
+  },
+  MIN: {
+    policyId: '29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6',
+    assetName: '4d494e',
+    minLiquidity: 100000,
+  },
 };
 
 const IRIS_BASE_URL = 'https://iris.indigoprotocol.io';
@@ -81,7 +100,9 @@ async function fetchIrisPrices(identifiers: string[]): Promise<number[]> {
   }
   const data = await resp.json();
   if (!Array.isArray(data)) return [];
-  return data.map((entry: { price: string }) => parseFloat(entry.price)).filter((p: number) => p > 0);
+  return data
+    .map((entry: { price: string }) => parseFloat(entry.price))
+    .filter((p: number) => p > 0);
 }
 
 function matchesToken(pool: any, policyId: string): boolean {
@@ -101,7 +122,9 @@ export function registerCardanoTools(server: McpServer): void {
       const upper = symbol.toUpperCase();
       const token = SUPPORTED_TOKENS[upper];
       if (!token) {
-        throw new Error(`Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`);
+        throw new Error(
+          `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
+        );
       }
 
       const [adaPrice, allPools] = await Promise.all([fetchADAUSDT(), fetchIrisPools()]);
@@ -128,32 +151,45 @@ export function registerCardanoTools(server: McpServer): void {
             return sum + (prices[i] || 0) * weight;
           }, 0);
         } else {
-          tokenAdaPrice = tokenPools.reduce((sum: number, p: any) => sum + (p.state?.price || 0), 0) / tokenPools.length;
+          tokenAdaPrice =
+            tokenPools.reduce((sum: number, p: any) => sum + (p.state?.price || 0), 0) /
+            tokenPools.length;
         }
       } else {
-        tokenAdaPrice = tokenPools.reduce((sum: number, p: any) => sum + (p.state?.price || 0), 0) / tokenPools.length;
+        tokenAdaPrice =
+          tokenPools.reduce((sum: number, p: any) => sum + (p.state?.price || 0), 0) /
+          tokenPools.length;
       }
 
       const tokenUsdtPrice = tokenAdaPrice * adaPrice.price;
       const confidence = Math.min(tokenPools.length / 3, 1);
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            symbol: `${upper}/USDT`,
-            price: tokenUsdtPrice,
-            tokenAdaPrice,
-            adaUsdtPrice: adaPrice.price,
-            confidence,
-            poolsUsed: tokenPools.length,
-            sources: {
-              ada: adaPrice.sources,
-              pools: tokenPools.map((p: any) => ({ dex: p.dex || 'unknown', tvl: p.state?.tvl })),
-            },
-            timestamp: new Date().toISOString(),
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                symbol: `${upper}/USDT`,
+                price: tokenUsdtPrice,
+                tokenAdaPrice,
+                adaUsdtPrice: adaPrice.price,
+                confidence,
+                poolsUsed: tokenPools.length,
+                sources: {
+                  ada: adaPrice.sources,
+                  pools: tokenPools.map((p: any) => ({
+                    dex: p.dex || 'unknown',
+                    tvl: p.state?.tvl,
+                  })),
+                },
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
       };
     }
   );
@@ -168,7 +204,9 @@ export function registerCardanoTools(server: McpServer): void {
       const upper = symbol.toUpperCase();
       const token = SUPPORTED_TOKENS[upper];
       if (!token) {
-        throw new Error(`Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`);
+        throw new Error(
+          `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
+        );
       }
 
       const allPools = await fetchIrisPools();
@@ -177,23 +215,29 @@ export function registerCardanoTools(server: McpServer): void {
         .sort((a: any, b: any) => (b.state?.tvl || 0) - (a.state?.tvl || 0));
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            symbol: upper,
-            totalPools: tokenPools.length,
-            pools: tokenPools.map((p: any) => ({
-              identifier: p.identifier,
-              dex: p.dex || 'unknown',
-              tvl: p.state?.tvl || 0,
-              reserveA: p.state?.reserveA || 0,
-              reserveB: p.state?.reserveB || 0,
-              price: p.state?.price || null,
-              isActive: p.isActive !== false,
-            })),
-            timestamp: new Date().toISOString(),
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                symbol: upper,
+                totalPools: tokenPools.length,
+                pools: tokenPools.map((p: any) => ({
+                  identifier: p.identifier,
+                  dex: p.dex || 'unknown',
+                  tvl: p.state?.tvl || 0,
+                  reserveA: p.state?.reserveA || 0,
+                  reserveB: p.state?.reserveB || 0,
+                  price: p.state?.price || null,
+                  isActive: p.isActive !== false,
+                })),
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
       };
     }
   );

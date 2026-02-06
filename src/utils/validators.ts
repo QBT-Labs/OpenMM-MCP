@@ -4,9 +4,7 @@ export const ExchangeParam = z
   .string()
   .describe('Exchange to query. Supported: mexc, gateio, bitget, kraken');
 
-export const SymbolParam = z
-  .string()
-  .describe('Trading pair symbol (e.g., BTC/USDT, INDY/USDT)');
+export const SymbolParam = z.string().describe('Trading pair symbol (e.g., BTC/USDT, INDY/USDT)');
 
 export const OptionalSymbolParam = z
   .string()

@@ -52,7 +52,12 @@ describe('Strategy MCP Tools', () => {
 
   beforeAll(async () => {
     mockExchangeFactory.isSupported.mockReturnValue(true);
-    mockExchangeFactory.getSupportedExchanges.mockReturnValue(['mexc', 'gateio', 'bitget', 'kraken']);
+    mockExchangeFactory.getSupportedExchanges.mockReturnValue([
+      'mexc',
+      'gateio',
+      'bitget',
+      'kraken',
+    ]);
     mockExchangeFactory.getExchange.mockResolvedValue(mockConnector as any);
 
     const server = createServer();
@@ -69,7 +74,12 @@ describe('Strategy MCP Tools', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockExchangeFactory.isSupported.mockReturnValue(true);
-    mockExchangeFactory.getSupportedExchanges.mockReturnValue(['mexc', 'gateio', 'bitget', 'kraken']);
+    mockExchangeFactory.getSupportedExchanges.mockReturnValue([
+      'mexc',
+      'gateio',
+      'bitget',
+      'kraken',
+    ]);
     mockExchangeFactory.getExchange.mockResolvedValue(mockConnector as any);
   });
 

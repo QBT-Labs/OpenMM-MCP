@@ -36,7 +36,7 @@ function calculateGridLevels(
     const raw = Array.from({ length: levels }, (_, i) => levels - i);
     const sum = raw.reduce((a, b) => a + b, 0);
     const norm = levels / sum;
-    raw.forEach(w => weights.push(w * norm));
+    raw.forEach((w) => weights.push(w * norm));
   } else {
     for (let i = 0; i < levels; i++) weights.push(1.0);
   }
@@ -62,14 +62,40 @@ export function registerStrategyTools(server: McpServer): void {
       exchange: ExchangeParam,
       symbol: SymbolParam,
       levels: z.number().min(1).max(10).default(5).describe('Grid levels per side (default: 5)'),
-      spacing: z.number().min(0.001).max(0.5).default(0.02).describe('Base spacing as decimal (default: 0.02 = 2%)'),
-      orderSize: z.number().positive().default(50).describe('Base order size in quote currency (default: 50)'),
+      spacing: z
+        .number()
+        .min(0.001)
+        .max(0.5)
+        .default(0.02)
+        .describe('Base spacing as decimal (default: 0.02 = 2%)'),
+      orderSize: z
+        .number()
+        .positive()
+        .default(50)
+        .describe('Base order size in quote currency (default: 50)'),
       spacingModel: z.enum(['linear', 'geometric']).default('linear').describe('Spacing model'),
-      spacingFactor: z.number().positive().default(1.3).describe('Factor for geometric spacing (default: 1.3)'),
+      spacingFactor: z
+        .number()
+        .positive()
+        .default(1.3)
+        .describe('Factor for geometric spacing (default: 1.3)'),
       sizeModel: z.enum(['flat', 'pyramidal']).default('flat').describe('Size model'),
-      dryRun: z.boolean().default(true).describe('Preview grid without placing orders (default: true)'),
+      dryRun: z
+        .boolean()
+        .default(true)
+        .describe('Preview grid without placing orders (default: true)'),
     },
-    async ({ exchange, symbol, levels, spacing, orderSize, spacingModel, spacingFactor, sizeModel, dryRun }) => {
+    async ({
+      exchange,
+      symbol,
+      levels,
+      spacing,
+      orderSize,
+      spacingModel,
+      spacingFactor,
+      sizeModel,
+      dryRun,
+    }) => {
       const validExchange = validateExchange(exchange);
       const validSymbol = validateSymbol(symbol);
 
@@ -77,38 +103,62 @@ export function registerStrategyTools(server: McpServer): void {
       const ticker = await connector.getTicker(validSymbol);
       const centerPrice = ticker.last;
 
-      const grid = calculateGridLevels(centerPrice, levels, spacing, spacingModel, spacingFactor, orderSize, sizeModel);
+      const grid = calculateGridLevels(
+        centerPrice,
+        levels,
+        spacing,
+        spacingModel,
+        spacingFactor,
+        orderSize,
+        sizeModel
+      );
 
       const placedOrders: any[] = [];
       if (!dryRun) {
         for (const level of grid) {
-          const order = await connector.createOrder(validSymbol, 'limit', level.side, level.orderSize, level.price);
+          const order = await connector.createOrder(
+            validSymbol,
+            'limit',
+            level.side,
+            level.orderSize,
+            level.price
+          );
           placedOrders.push(order);
         }
       }
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            status: dryRun ? 'preview' : 'active',
-            centerPrice,
-            config: { levels, spacing, spacingModel, spacingFactor, orderSize, sizeModel },
-            grid: grid.map(l => ({
-              side: l.side,
-              price: l.price,
-              amount: l.orderSize,
-              valueQuote: l.price * l.orderSize,
-            })),
-            totalOrders: grid.length,
-            totalBuyValue: grid.filter(l => l.side === 'buy').reduce((s, l) => s + l.price * l.orderSize, 0),
-            totalSellValue: grid.filter(l => l.side === 'sell').reduce((s, l) => s + l.price * l.orderSize, 0),
-            ...(dryRun ? {} : { placedOrders }),
-            exchange: validExchange,
-            symbol: validSymbol,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                status: dryRun ? 'preview' : 'active',
+                centerPrice,
+                config: { levels, spacing, spacingModel, spacingFactor, orderSize, sizeModel },
+                grid: grid.map((l) => ({
+                  side: l.side,
+                  price: l.price,
+                  amount: l.orderSize,
+                  valueQuote: l.price * l.orderSize,
+                })),
+                totalOrders: grid.length,
+                totalBuyValue: grid
+                  .filter((l) => l.side === 'buy')
+                  .reduce((s, l) => s + l.price * l.orderSize, 0),
+                totalSellValue: grid
+                  .filter((l) => l.side === 'sell')
+                  .reduce((s, l) => s + l.price * l.orderSize, 0),
+                ...(dryRun ? {} : { placedOrders }),
+                exchange: validExchange,
+                symbol: validSymbol,
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
       };
     }
   );
@@ -129,17 +179,23 @@ export function registerStrategyTools(server: McpServer): void {
       const result = await connector.cancelAllOrders(validSymbol);
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            status: 'stopped',
-            cancelledOrders: openOrders.length,
-            result,
-            exchange: validExchange,
-            symbol: validSymbol,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                status: 'stopped',
+                cancelledOrders: openOrders.length,
+                result,
+                exchange: validExchange,
+                symbol: validSymbol,
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
       };
     }
   );
@@ -164,34 +220,42 @@ export function registerStrategyTools(server: McpServer): void {
       const buyOrders = openOrders.filter((o: any) => o.side === 'buy');
       const sellOrders = openOrders.filter((o: any) => o.side === 'sell');
 
-      const spread = sellOrders.length > 0 && buyOrders.length > 0
-        ? Math.min(...sellOrders.map((o: any) => o.price)) - Math.max(...buyOrders.map((o: any) => o.price))
-        : null;
+      const spread =
+        sellOrders.length > 0 && buyOrders.length > 0
+          ? Math.min(...sellOrders.map((o: any) => o.price)) -
+            Math.max(...buyOrders.map((o: any) => o.price))
+          : null;
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            currentPrice: ticker.last,
-            openOrders: {
-              total: openOrders.length,
-              buyOrders: buyOrders.length,
-              sellOrders: sellOrders.length,
-            },
-            gridSpread: spread,
-            orders: openOrders.map((o: any) => ({
-              id: o.id,
-              side: o.side,
-              price: o.price,
-              amount: o.amount,
-              filled: o.filled,
-              remaining: o.remaining,
-            })),
-            exchange: validExchange,
-            symbol: validSymbol,
-            timestamp: new Date().toISOString(),
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                currentPrice: ticker.last,
+                openOrders: {
+                  total: openOrders.length,
+                  buyOrders: buyOrders.length,
+                  sellOrders: sellOrders.length,
+                },
+                gridSpread: spread,
+                orders: openOrders.map((o: any) => ({
+                  id: o.id,
+                  side: o.side,
+                  price: o.price,
+                  amount: o.amount,
+                  filled: o.filled,
+                  remaining: o.remaining,
+                })),
+                exchange: validExchange,
+                symbol: validSymbol,
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
       };
     }
   );

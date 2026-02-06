@@ -12,9 +12,7 @@ export function registerAccountTools(server: McpServer): void {
       asset: z
         .string()
         .optional()
-        .describe(
-          'Optional asset to filter by (e.g., USDT, BTC). Returns all assets if omitted.'
-        ),
+        .describe('Optional asset to filter by (e.g., USDT, BTC). Returns all assets if omitted.'),
     },
     async ({ exchange, asset }) => {
       const validExchange = validateExchange(exchange);

@@ -35,7 +35,7 @@ function setupFetchByUrl(config: {
     }
 
     if (typeof url === 'string' && url.includes('liquidity-pools/prices')) {
-      const priceData = (config.prices || []).map(p => ({ price: String(p) }));
+      const priceData = (config.prices || []).map((p) => ({ price: String(p) }));
       return Promise.resolve({ ok: true, json: async () => priceData });
     }
 
@@ -45,14 +45,20 @@ function setupFetchByUrl(config: {
 
     if (typeof url === 'string' && (url.includes('binance') || url.includes('mexc'))) {
       if (config.adaPrice) {
-        return Promise.resolve({ ok: true, json: async () => ({ price: String(config.adaPrice) }) });
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ price: String(config.adaPrice) }),
+        });
       }
       return Promise.resolve({ ok: false });
     }
 
     if (typeof url === 'string' && url.includes('coingecko')) {
       if (config.adaPrice) {
-        return Promise.resolve({ ok: true, json: async () => ({ cardano: { usd: config.adaPrice } }) });
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ cardano: { usd: config.adaPrice } }),
+        });
       }
       return Promise.resolve({ ok: false });
     }
@@ -87,7 +93,10 @@ describe('Cardano MCP Tools', () => {
       const indyPool = {
         identifier: 'pool-1',
         dex: 'minswap',
-        pair: { tokenA: { policyId: '533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0' }, tokenB: {} },
+        pair: {
+          tokenA: { policyId: '533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0' },
+          tokenB: {},
+        },
         state: { tvl: 200000, price: 0.5 },
         isActive: true,
       };
@@ -132,7 +141,10 @@ describe('Cardano MCP Tools', () => {
       const lowTvlPool = {
         identifier: 'pool-low',
         dex: 'sundaeswap',
-        pair: { tokenA: { policyId: '279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f' }, tokenB: {} },
+        pair: {
+          tokenA: { policyId: '279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f' },
+          tokenB: {},
+        },
         state: { tvl: 100, price: 0.01 },
       };
 
@@ -153,14 +165,20 @@ describe('Cardano MCP Tools', () => {
         {
           identifier: 'pool-a',
           dex: 'minswap',
-          pair: { tokenA: { policyId: '29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6' }, tokenB: {} },
+          pair: {
+            tokenA: { policyId: '29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6' },
+            tokenB: {},
+          },
           state: { tvl: 500000, reserveA: 1000000, reserveB: 2000000, price: 0.3 },
           isActive: true,
         },
         {
           identifier: 'pool-b',
           dex: 'sundaeswap',
-          pair: { tokenA: {}, tokenB: { policyId: '29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6' } },
+          pair: {
+            tokenA: {},
+            tokenB: { policyId: '29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6' },
+          },
           state: { tvl: 200000, reserveA: 500000, reserveB: 800000, price: 0.28 },
           isActive: true,
         },

@@ -1,8 +1,4 @@
-import {
-  ExchangeFactory,
-  SupportedExchange,
-  BaseExchangeConnector,
-} from '@3rd-eye-labs/openmm';
+import { ExchangeFactory, SupportedExchange, BaseExchangeConnector } from '@3rd-eye-labs/openmm';
 
 export { ExchangeFactory, SupportedExchange };
 
