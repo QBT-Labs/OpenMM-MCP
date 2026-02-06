@@ -1,6 +1,18 @@
-# openMM-mcp-agent
+# @qbtlabs/openmm-mcp
 
-Standalone MCP (Model Context Protocol) server for [OpenMM](https://github.com/3rd-Eye-Labs/OpenMM) — exposes market data, account, and trading tools to AI agents via Claude Desktop, Cursor, and other MCP clients.
+MCP (Model Context Protocol) server for [OpenMM](https://github.com/3rd-Eye-Labs/OpenMM) — exposes market data, account, trading, and strategy tools to AI agents via Claude Desktop, Cursor, and other MCP clients.
+
+## Installation
+
+```bash
+npm install -g @qbtlabs/openmm-mcp
+```
+
+Or run directly:
+
+```bash
+npx @qbtlabs/openmm-mcp
+```
 
 ## Available Tools
 
@@ -14,6 +26,11 @@ Standalone MCP (Model Context Protocol) server for [OpenMM](https://github.com/3
 | `create_order` | Place limit or market order | `exchange`, `symbol`, `type`, `side`, `amount`, `price?` |
 | `cancel_order` | Cancel order by ID | `exchange`, `symbol`, `orderId` |
 | `cancel_all_orders` | Cancel all orders for a pair | `exchange`, `symbol` |
+| `start_grid_strategy` | Calculate and place grid orders | `exchange`, `symbol`, `levels?`, `spacing?`, `orderSize?`, `spacingModel?`, `sizeModel?`, `dryRun?` |
+| `stop_strategy` | Cancel all orders for a pair | `exchange`, `symbol` |
+| `get_strategy_status` | Grid status with open orders and spread | `exchange`, `symbol` |
+| `get_cardano_price` | Aggregated Cardano token price from DEXes | `symbol` |
+| `discover_pools` | Discover Cardano DEX liquidity pools | `symbol` |
 
 ## Resources
 
@@ -38,22 +55,6 @@ Standalone MCP (Model Context Protocol) server for [OpenMM](https://github.com/3
 - **Gate.io** — `GATEIO_API_KEY`, `GATEIO_SECRET`
 - **Kraken** — `KRAKEN_API_KEY`, `KRAKEN_SECRET`
 
-## Setup
-
-```bash
-# Clone and install
-git clone https://github.com/QBT-Labs/openMM-mcp-agent.git
-cd openMM-mcp-agent
-npm install
-
-# Set exchange credentials
-cp .env.example .env
-# Edit .env with your API keys
-
-# Build
-npm run build
-```
-
 ## Claude Desktop Integration
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -62,8 +63,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "openmm": {
-      "command": "node",
-      "args": ["/path/to/openMM-mcp-agent/dist/index.js"],
+      "command": "npx",
+      "args": ["@qbtlabs/openmm-mcp"],
       "env": {
         "MEXC_API_KEY": "your_key",
         "MEXC_SECRET_KEY": "your_secret",
@@ -83,8 +84,8 @@ Add to `.cursor/mcp.json` in your project:
 {
   "mcpServers": {
     "openmm": {
-      "command": "node",
-      "args": ["/path/to/openMM-mcp-agent/dist/index.js"],
+      "command": "npx",
+      "args": ["@qbtlabs/openmm-mcp"],
       "env": {
         "MEXC_API_KEY": "your_key",
         "MEXC_SECRET_KEY": "your_secret"
@@ -97,6 +98,11 @@ Add to `.cursor/mcp.json` in your project:
 ## Development
 
 ```bash
+git clone https://github.com/QBT-Labs/openMM-mcp-agent.git
+cd openMM-mcp-agent
+npm install
+cp .env.example .env  # Edit with your API keys
+
 npm run typecheck    # Type checking
 npm run lint         # Linting
 npm run format:check # Format checking

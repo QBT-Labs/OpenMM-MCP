@@ -1,11 +1,12 @@
 {
-  "name": "@qbt-labs/openmm-mcp-agent",
-  "version": "0.1.0",
-  "description": "MCP server agent for OpenMM — exposes market data, account, and trading tools to AI agents",
+  "name": "@qbtlabs/openmm-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for OpenMM — exposes market data, account, trading, and strategy tools to AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "openmm-mcp-agent": "dist/index.js"
+    "openmm-mcp": "dist/index.js",
+    "qbtlabs-openmm-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
