@@ -8,6 +8,14 @@ MCP (Model Context Protocol) server for [OpenMM](https://github.com/3rd-Eye-Labs
 
 Install and connect — **13 tools** are now available to your AI agent.
 
+## What Agents Can Do
+
+- **Monitor markets** — Real-time prices, order books, and trade history across multiple exchanges
+- **Trade** — Place limit and market orders, cancel orders, manage positions
+- **Check balances** — View account holdings across all connected exchanges
+- **Run grid strategies** — Configure and deploy automated grid trading with dry-run preview
+- **Discover Cardano DEX liquidity** — Aggregated token prices and pool discovery via on-chain data
+
 ## Installation
 
 ```bash
