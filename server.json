@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.qbt-labs/openmm-mcp",
+  "description": "MCP server that gives AI agents real crypto trading capabilities. 13 tools across market data, order execution, grid strategies, and Cardano DeFi.",
+  "repository": {
+    "url": "https://github.com/QBT-Labs/openMM-MCP",
+    "source": "github"
+  },
+  "version": "1.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@qbtlabs/openmm-mcp",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
