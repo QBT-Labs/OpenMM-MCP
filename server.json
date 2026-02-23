@@ -6,12 +6,12 @@
     "url": "https://github.com/QBT-Labs/openMM-MCP",
     "source": "github"
   },
-  "version": "1.0.2",
+  "version": "1.0.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@qbtlabs/openmm-mcp",
-      "version": "1.0.2",
+      "version": "1.0.4",
       "transport": {
         "type": "stdio"
       }
