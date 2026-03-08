@@ -144,6 +144,13 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 }
 ```
 
+### Docker
+
+```bash
+docker build -t openmm-mcp .
+docker run -e MEXC_API_KEY=your_key -e MEXC_SECRET_KEY=your_secret openmm-mcp
+```
+
 ### Remote Server
 
 Connect directly to the hosted server — no local install required:
