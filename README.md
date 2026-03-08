@@ -10,6 +10,10 @@ MCP (Model Context Protocol) server for [OpenMM](https://github.com/3rd-Eye-Labs
 
 Install and connect — **13 tools** are now available to your AI agent.
 
+<a href="https://glama.ai/mcp/servers/QBT-Labs/openmm-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/QBT-Labs/openmm-mcp/badge" alt="openmm-mcp MCP server" />
+</a>
+
 ## What Agents Can Do
 
 - **Monitor markets** — Real-time prices, order books, and trade history across multiple exchanges
