@@ -1,6 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 import { ExchangeParam, SymbolParam, LimitParam, validateSymbol } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
+
+// Timeframe parameter for OHLCV
+const TimeframeParam = z
+  .enum(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'])
+  .default('1h')
+  .describe('Candlestick timeframe (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)');
 
 export function registerMarketDataTools(server: McpServer): void {
   server.tool(
@@ -129,6 +136,97 @@ export function registerMarketDataTools(server: McpServer): void {
                   buyTrades: buyTrades.length,
                   sellTrades: sellTrades.length,
                   totalVolume,
+                },
+                exchange: validExchange,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    'get_ohlcv',
+    'Get OHLCV (candlestick) data for a trading pair. Returns open, high, low, close, volume for each period.',
+    {
+      exchange: ExchangeParam,
+      symbol: SymbolParam,
+      timeframe: TimeframeParam,
+      limit: LimitParam(100, 500),
+    },
+    async ({ exchange, symbol, timeframe, limit }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
+
+      const connector = await getConnectorSafe(exchange);
+
+      // Cast via unknown since getOHLCV exists on concrete connectors but not base type
+      type OHLCVConnector = {
+        getOHLCV?: (
+          symbol: string,
+          timeframe: string,
+          limit: number
+        ) => Promise<
+          Array<{
+            timestamp: number;
+            open: number;
+            high: number;
+            low: number;
+            close: number;
+            volume: number;
+          }>
+        >;
+      };
+      const connectorWithOHLCV = connector as unknown as OHLCVConnector;
+
+      if (!connectorWithOHLCV.getOHLCV) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ error: `OHLCV not supported on ${validExchange}` }, null, 2),
+            },
+          ],
+        };
+      }
+
+      const ohlcv = await connectorWithOHLCV.getOHLCV(validSymbol, timeframe, limit);
+
+      // Calculate some useful stats
+      const high = Math.max(...ohlcv.map((c) => c.high));
+      const low = Math.min(...ohlcv.map((c) => c.low));
+      const volumes = ohlcv.map((c) => c.volume);
+      const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+      const priceChange = ohlcv.length > 1 ? ohlcv[ohlcv.length - 1].close - ohlcv[0].open : 0;
+      const priceChangePercent = ohlcv.length > 1 ? (priceChange / ohlcv[0].open) * 100 : 0;
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                symbol: validSymbol,
+                timeframe,
+                candles: ohlcv.map((c) => ({
+                  timestamp: c.timestamp,
+                  open: c.open,
+                  high: c.high,
+                  low: c.low,
+                  close: c.close,
+                  volume: c.volume,
+                })),
+                summary: {
+                  count: ohlcv.length,
+                  periodHigh: high,
+                  periodLow: low,
+                  avgVolume,
+                  priceChange,
+                  priceChangePercent,
+                  latestClose: ohlcv[ohlcv.length - 1]?.close,
                 },
                 exchange: validExchange,
               },
