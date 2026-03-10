@@ -2,9 +2,16 @@
  * x402 Payment Verification
  *
  * Verifies payment signatures for Base (EVM) and Solana networks.
+ *
+ * Two modes:
+ * - Basic: Quick validation (dev/testing)
+ * - Full: Cryptographic signature verification + on-chain checks (production)
+ *
+ * Set X402_VERIFY_MODE=full for production.
  */
 
 import { PAYMENT_ADDRESSES, USDC_CONTRACTS } from './config.js';
+import { verifyEvmPaymentFull } from './verify-evm.js';
 
 export interface PaymentPayload {
   x402Version: number;
@@ -45,11 +52,25 @@ export function parsePaymentSignature(header: string): PaymentPayload | null {
 /**
  * Verify EVM payment on Base
  * Uses EIP-3009 TransferWithAuthorization verification
+ *
+ * Modes:
+ * - basic (default): Quick validation for dev/testing
+ * - full: Cryptographic signature + on-chain verification for production
+ *
+ * Set X402_VERIFY_MODE=full for production.
  */
 export async function verifyEvmPayment(
   payment: PaymentPayload,
   expectedAmount: number
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<{ valid: boolean; error?: string; details?: Record<string, unknown> }> {
+  const verifyMode = process.env.X402_VERIFY_MODE || 'basic';
+
+  // Use full verification in production
+  if (verifyMode === 'full') {
+    return verifyEvmPaymentFull(payment, expectedAmount);
+  }
+
+  // Basic validation for development/testing
   try {
     const { authorization } = payment.payload;
     const { accepted } = payment;
@@ -61,6 +82,9 @@ export async function verifyEvmPayment(
 
     // Check recipient
     const expectedRecipient = PAYMENT_ADDRESSES.evm.toLowerCase();
+    if (!expectedRecipient) {
+      return { valid: false, error: 'Payment receiver not configured' };
+    }
     if (authorization.to.toLowerCase() !== expectedRecipient) {
       return { valid: false, error: 'Invalid payment recipient' };
     }
@@ -90,13 +114,11 @@ export async function verifyEvmPayment(
       return { valid: false, error: 'Invalid payment asset' };
     }
 
-    // TODO: Full on-chain verification would involve:
-    // 1. Checking the signature against EIP-712 typed data
-    // 2. Verifying the nonce hasn't been used
-    // 3. Checking the from address has sufficient USDC balance
-    //
-    // For now, we do basic validation and trust the facilitator
-    // In production, integrate with a facilitator service or verify on-chain
+    // Basic mode: Trust the signature format
+    // WARNING: Not cryptographically secure - use X402_VERIFY_MODE=full for production
+    if (verifyMode === 'basic') {
+      console.warn('x402: Using basic verification mode - set X402_VERIFY_MODE=full for production');
+    }
 
     return { valid: true };
   } catch (error) {

@@ -22,9 +22,15 @@ const config: Config = {
         diagnostics: {
           ignoreCodes: [151002],
         },
+        useESM: true,
       },
     ],
   },
+  // Transform ESM packages
+  transformIgnorePatterns: [
+    'node_modules/(?!(@noble/hashes|@noble/curves)/)',
+  ],
+  extensionsToTreatAsEsm: ['.ts'],
 };
 
 export default config;

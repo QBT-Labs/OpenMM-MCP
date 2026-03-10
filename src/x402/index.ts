@@ -43,6 +43,12 @@ export {
   type PaymentPayload,
 } from './verify.js';
 
+// Production EVM verification
+export {
+  verifyEvmPaymentFull,
+  executeEvmPayment,
+} from './verify-evm.js';
+
 // Middleware
 export {
   withX402,
