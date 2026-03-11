@@ -61,7 +61,7 @@ export default {
         throw new Error(`process.exit(${code}) called`);
       }) as never;
 
-      const { createServer } = await import('./index.js');
+      const { createServer } = await import('./server.js');
       const { WebStandardStreamableHTTPServerTransport } =
         await import('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js');
 

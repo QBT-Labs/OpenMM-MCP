@@ -22,6 +22,20 @@ Install and connect — **13 tools** are now available to your AI agent.
 - **Run grid strategies** — Configure and deploy automated grid trading with dry-run preview
 - **Discover Cardano DEX liquidity** — Aggregated token prices and pool discovery via on-chain data
 
+## Quick Setup
+
+Run the interactive setup wizard to configure your exchange API credentials:
+
+```bash
+npx @qbtlabs/openmm-mcp setup
+```
+
+This will:
+1. Ask which MCP client you're using (Claude Desktop, Claude Code, Cursor, Windsurf)
+2. Let you select which exchanges to configure
+3. Prompt for API credentials
+4. Automatically update your MCP config file
+
 ## Installation
 
 ```bash
