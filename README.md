@@ -22,6 +22,38 @@ Install and connect — **13 tools** are now available to your AI agent.
 - **Run grid strategies** — Configure and deploy automated grid trading with dry-run preview
 - **Discover Cardano DEX liquidity** — Aggregated token prices and pool discovery via on-chain data
 
+## ⚡ Quick Start
+
+### MCP Server (13 tools)
+
+```bash
+# 1. Install & Setup OpenMM MCP
+npm install -g @qbtlabs/openmm-mcp
+npx @qbtlabs/openmm-mcp setup
+```
+
+The setup wizard will:
+- Ask which MCP clients to configure (Claude Desktop, Claude Code, Cursor, Windsurf)
+- Let you select exchanges (MEXC, Gate.io, Kraken, Bitget)
+- Prompt for API credentials
+- Automatically update your MCP config files
+
+### CLI Tool — Optional
+
+```bash
+# 2. Install & Setup OpenMM CLI
+npm install -g openmm
+npx openmm setup
+```
+
+Creates a `.env` file with your exchange credentials for direct CLI usage.
+
+### Verify Installation
+
+After setup, restart your MCP client and try:
+
+> "What is my balance on MEXC?"
+
 ## Installation
 
 ```bash
