@@ -1,6 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { X402Wrappers } from '../x402-setup.js';
 
 const SUPPORTED_TOKENS: Record<
   string,
@@ -112,10 +111,7 @@ function matchesToken(pool: any, policyId: string): boolean {
   return tokenA?.policyId === policyId || tokenB?.policyId === policyId;
 }
 
-const identity = (fn: any) => fn;
-
-export function registerCardanoTools(server: McpServer, wrappers: X402Wrappers | null): void {
-  const wrap = wrappers?.paidRead ?? identity;
+export function registerCardanoTools(server: McpServer): void {
 
   server.tool(
     'get_cardano_price',
@@ -123,12 +119,12 @@ export function registerCardanoTools(server: McpServer, wrappers: X402Wrappers |
     {
       symbol: z.string().describe('Cardano token symbol (INDY, SNEK, MIN, NIGHT)'),
     },
-    wrap(async (args: { symbol: string }) => {
-      const upper = args.symbol.toUpperCase();
+    async ({ symbol }) => {
+      const upper = symbol.toUpperCase();
       const token = SUPPORTED_TOKENS[upper];
       if (!token) {
         throw new Error(
-          `Unsupported token: ${args.symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
+          `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
         );
       }
 
@@ -196,7 +192,7 @@ export function registerCardanoTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -205,12 +201,12 @@ export function registerCardanoTools(server: McpServer, wrappers: X402Wrappers |
     {
       symbol: z.string().describe('Cardano token symbol (INDY, SNEK, MIN, NIGHT)'),
     },
-    wrap(async (args: { symbol: string }) => {
-      const upper = args.symbol.toUpperCase();
+    async ({ symbol }) => {
+      const upper = symbol.toUpperCase();
       const token = SUPPORTED_TOKENS[upper];
       if (!token) {
         throw new Error(
-          `Unsupported token: ${args.symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
+          `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
         );
       }
 
@@ -244,6 +240,6 @@ export function registerCardanoTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 }

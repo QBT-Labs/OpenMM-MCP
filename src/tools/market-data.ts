@@ -2,17 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ExchangeParam, SymbolParam, LimitParam, validateSymbol } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
-import type { X402Wrappers } from '../x402-setup.js';
 
 const TimeframeParam = z
   .enum(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'])
   .default('1h')
   .describe('Candlestick timeframe (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)');
 
-const identity = (fn: any) => fn;
-
-export function registerMarketDataTools(server: McpServer, wrappers: X402Wrappers | null): void {
-  const wrap = wrappers?.paidRead ?? identity;
+export function registerMarketDataTools(server: McpServer): void {
 
   server.tool(
     'get_ticker',
@@ -21,10 +17,10 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
       exchange: ExchangeParam,
       symbol: SymbolParam,
     },
-    wrap(async (args: { exchange: string; symbol: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
-      const connector = await getConnectorSafe(args.exchange);
+    async ({ exchange, symbol }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
+      const connector = await getConnectorSafe(exchange);
       const ticker = await connector.getTicker(validSymbol);
 
       return {
@@ -50,7 +46,7 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -61,14 +57,14 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
       symbol: SymbolParam,
       limit: LimitParam(10, 100),
     },
-    wrap(async (args: { exchange: string; symbol: string; limit: number }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
-      const connector = await getConnectorSafe(args.exchange);
+    async ({ exchange, symbol, limit }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
+      const connector = await getConnectorSafe(exchange);
       const orderbook = await connector.getOrderBook(validSymbol);
 
-      const bids = orderbook.bids.slice(0, args.limit);
-      const asks = orderbook.asks.slice(0, args.limit);
+      const bids = orderbook.bids.slice(0, limit);
+      const asks = orderbook.asks.slice(0, limit);
       const spread =
         orderbook.asks.length > 0 && orderbook.bids.length > 0
           ? orderbook.asks[0].price - orderbook.bids[0].price
@@ -100,7 +96,7 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -111,12 +107,12 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
       symbol: SymbolParam,
       limit: LimitParam(20, 100),
     },
-    wrap(async (args: { exchange: string; symbol: string; limit: number }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
-      const connector = await getConnectorSafe(args.exchange);
+    async ({ exchange, symbol, limit }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
+      const connector = await getConnectorSafe(exchange);
       const trades = await connector.getRecentTrades(validSymbol);
-      const limitedTrades = trades.slice(0, args.limit);
+      const limitedTrades = trades.slice(0, limit);
 
       const buyTrades = limitedTrades.filter((t) => t.side === 'buy');
       const sellTrades = limitedTrades.filter((t) => t.side === 'sell');
@@ -144,7 +140,7 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -156,10 +152,10 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
       timeframe: TimeframeParam,
       limit: LimitParam(100, 500),
     },
-    wrap(async (args: { exchange: string; symbol: string; timeframe: string; limit: number }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
-      const connector = await getConnectorSafe(args.exchange);
+    async ({ exchange, symbol, timeframe, limit }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
+      const connector = await getConnectorSafe(exchange);
 
       type OHLCVConnector = {
         getOHLCV?: (
@@ -190,7 +186,7 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
         };
       }
 
-      const ohlcv = await connectorWithOHLCV.getOHLCV(validSymbol, args.timeframe, args.limit);
+      const ohlcv = await connectorWithOHLCV.getOHLCV(validSymbol, timeframe, limit);
       const high = Math.max(...ohlcv.map((c) => c.high));
       const low = Math.min(...ohlcv.map((c) => c.low));
       const volumes = ohlcv.map((c) => c.volume);
@@ -205,7 +201,7 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
             text: JSON.stringify(
               {
                 symbol: validSymbol,
-                timeframe: args.timeframe,
+                timeframe,
                 candles: ohlcv.map((c) => ({
                   timestamp: c.timestamp,
                   open: c.open,
@@ -231,6 +227,6 @@ export function registerMarketDataTools(server: McpServer, wrappers: X402Wrapper
           },
         ],
       };
-    })
+    }
   );
 }

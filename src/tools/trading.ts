@@ -2,12 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ExchangeParam, SymbolParam, validateSymbol } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
-import type { X402Wrappers } from '../x402-setup.js';
 
-const identity = (fn: any) => fn;
-
-export function registerTradingTools(server: McpServer, wrappers: X402Wrappers | null): void {
-  const wrap = wrappers?.paidWrite ?? identity;
+export function registerTradingTools(server: McpServer): void {
 
   server.tool(
     'create_order',
@@ -24,16 +20,16 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
         .optional()
         .describe('Order price (required for limit orders, ignored for market orders)'),
     },
-    wrap(async (args: { exchange: string; symbol: string; type: 'limit' | 'market'; side: 'buy' | 'sell'; amount: number; price?: number }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
+    async ({ exchange, symbol, type, side, amount, price }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
 
-      if (args.type === 'limit' && args.price === undefined) {
+      if (type === 'limit' && price === undefined) {
         throw new Error('Price is required for limit orders');
       }
 
-      const connector = await getConnectorSafe(args.exchange);
-      const order = await connector.createOrder(validSymbol, args.type, args.side, args.amount, args.price);
+      const connector = await getConnectorSafe(exchange);
+      const order = await connector.createOrder(validSymbol, type, side, amount, price);
 
       return {
         content: [
@@ -50,7 +46,7 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -61,12 +57,12 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
       symbol: SymbolParam,
       orderId: z.string().describe('The order ID to cancel'),
     },
-    wrap(async (args: { exchange: string; symbol: string; orderId: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
+    async ({ exchange, symbol, orderId }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
 
-      const connector = await getConnectorSafe(args.exchange);
-      const result = await connector.cancelOrder(args.orderId, validSymbol);
+      const connector = await getConnectorSafe(exchange);
+      const result = await connector.cancelOrder(orderId, validSymbol);
 
       return {
         content: [
@@ -75,7 +71,7 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
             text: JSON.stringify(
               {
                 cancelled: result,
-                orderId: args.orderId,
+                orderId,
                 symbol: validSymbol,
                 exchange: validExchange,
               },
@@ -85,7 +81,7 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -95,11 +91,11 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
       exchange: ExchangeParam,
       symbol: SymbolParam,
     },
-    wrap(async (args: { exchange: string; symbol: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
+    async ({ exchange, symbol }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
 
-      const connector = await getConnectorSafe(args.exchange);
+      const connector = await getConnectorSafe(exchange);
       const result = await connector.cancelAllOrders(validSymbol);
 
       return {
@@ -118,6 +114,6 @@ export function registerTradingTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 }

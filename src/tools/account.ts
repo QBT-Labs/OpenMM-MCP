@@ -2,12 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ExchangeParam, OptionalSymbolParam } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
-import type { X402Wrappers } from '../x402-setup.js';
 
-const identity = (fn: any) => fn;
-
-export function registerAccountTools(server: McpServer, wrappers: X402Wrappers | null): void {
-  const wrap = wrappers?.paidRead ?? identity;
+export function registerAccountTools(server: McpServer): void {
 
   server.tool(
     'get_balance',
@@ -19,14 +15,14 @@ export function registerAccountTools(server: McpServer, wrappers: X402Wrappers |
         .optional()
         .describe('Optional asset to filter by (e.g., USDT, BTC). Returns all assets if omitted.'),
     },
-    wrap(async (args: { exchange: string; asset?: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const connector = await getConnectorSafe(args.exchange);
+    async ({ exchange, asset }) => {
+      const validExchange = validateExchange(exchange);
+      const connector = await getConnectorSafe(exchange);
       const balances = await connector.getBalance();
 
       let entries = Object.values(balances);
-      if (args.asset) {
-        const upperAsset = args.asset.toUpperCase();
+      if (asset) {
+        const upperAsset = asset.toUpperCase();
         entries = entries.filter((b) => b.asset.toUpperCase() === upperAsset);
         if (entries.length === 0) {
           return {
@@ -64,7 +60,7 @@ export function registerAccountTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -74,10 +70,10 @@ export function registerAccountTools(server: McpServer, wrappers: X402Wrappers |
       exchange: ExchangeParam,
       symbol: OptionalSymbolParam,
     },
-    wrap(async (args: { exchange: string; symbol?: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const connector = await getConnectorSafe(args.exchange);
-      const orders = await connector.getOpenOrders(args.symbol);
+    async ({ exchange, symbol }) => {
+      const validExchange = validateExchange(exchange);
+      const connector = await getConnectorSafe(exchange);
+      const orders = await connector.getOpenOrders(symbol);
 
       return {
         content: [
@@ -87,7 +83,7 @@ export function registerAccountTools(server: McpServer, wrappers: X402Wrappers |
               {
                 orders,
                 totalOrders: orders.length,
-                ...(args.symbol ? { symbol: args.symbol } : {}),
+                ...(symbol ? { symbol } : {}),
                 exchange: validExchange,
               },
               null,
@@ -96,6 +92,6 @@ export function registerAccountTools(server: McpServer, wrappers: X402Wrappers |
           },
         ],
       };
-    })
+    }
   );
 }

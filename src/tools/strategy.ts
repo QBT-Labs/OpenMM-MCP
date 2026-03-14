@@ -2,7 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ExchangeParam, SymbolParam, validateSymbol } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
-import type { X402Wrappers } from '../x402-setup.js';
 
 interface GridLevel {
   price: number;
@@ -55,11 +54,7 @@ function calculateGridLevels(
   return grid;
 }
 
-const identity = (fn: any) => fn;
-
-export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers | null): void {
-  const wrapWrite = wrappers?.paidWrite ?? identity;
-  const wrapRead = wrappers?.paidRead ?? identity;
+export function registerStrategyTools(server: McpServer): void {
 
   server.tool(
     'start_grid_strategy',
@@ -91,36 +86,26 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
         .default(true)
         .describe('Preview grid without placing orders (default: true)'),
     },
-    wrapWrite(async (args: {
-      exchange: string;
-      symbol: string;
-      levels: number;
-      spacing: number;
-      orderSize: number;
-      spacingModel: 'linear' | 'geometric';
-      spacingFactor: number;
-      sizeModel: 'flat' | 'pyramidal';
-      dryRun: boolean;
-    }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
+    async ({ exchange, symbol, levels, spacing, orderSize, spacingModel, spacingFactor, sizeModel, dryRun }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
 
-      const connector = await getConnectorSafe(args.exchange);
+      const connector = await getConnectorSafe(exchange);
       const ticker = await connector.getTicker(validSymbol);
       const centerPrice = ticker.last;
 
       const grid = calculateGridLevels(
         centerPrice,
-        args.levels,
-        args.spacing,
-        args.spacingModel,
-        args.spacingFactor,
-        args.orderSize,
-        args.sizeModel
+        levels,
+        spacing,
+        spacingModel,
+        spacingFactor,
+        orderSize,
+        sizeModel
       );
 
       const placedOrders: any[] = [];
-      if (!args.dryRun) {
+      if (!dryRun) {
         for (const level of grid) {
           const order = await connector.createOrder(
             validSymbol,
@@ -139,15 +124,15 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
             type: 'text' as const,
             text: JSON.stringify(
               {
-                status: args.dryRun ? 'preview' : 'active',
+                status: dryRun ? 'preview' : 'active',
                 centerPrice,
                 config: {
-                  levels: args.levels,
-                  spacing: args.spacing,
-                  spacingModel: args.spacingModel,
-                  spacingFactor: args.spacingFactor,
-                  orderSize: args.orderSize,
-                  sizeModel: args.sizeModel,
+                  levels,
+                  spacing,
+                  spacingModel,
+                  spacingFactor,
+                  orderSize,
+                  sizeModel,
                 },
                 grid: grid.map((l) => ({
                   side: l.side,
@@ -162,7 +147,7 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
                 totalSellValue: grid
                   .filter((l) => l.side === 'sell')
                   .reduce((s, l) => s + l.price * l.orderSize, 0),
-                ...(args.dryRun ? {} : { placedOrders }),
+                ...(dryRun ? {} : { placedOrders }),
                 exchange: validExchange,
                 symbol: validSymbol,
                 timestamp: new Date().toISOString(),
@@ -173,7 +158,7 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -183,11 +168,11 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
       exchange: ExchangeParam,
       symbol: SymbolParam,
     },
-    wrapWrite(async (args: { exchange: string; symbol: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
+    async ({ exchange, symbol }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
 
-      const connector = await getConnectorSafe(args.exchange);
+      const connector = await getConnectorSafe(exchange);
       const openOrders = await connector.getOpenOrders(validSymbol);
       const result = await connector.cancelAllOrders(validSymbol);
 
@@ -210,7 +195,7 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
           },
         ],
       };
-    })
+    }
   );
 
   server.tool(
@@ -220,11 +205,11 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
       exchange: ExchangeParam,
       symbol: SymbolParam,
     },
-    wrapRead(async (args: { exchange: string; symbol: string }) => {
-      const validExchange = validateExchange(args.exchange);
-      const validSymbol = validateSymbol(args.symbol);
+    async ({ exchange, symbol }) => {
+      const validExchange = validateExchange(exchange);
+      const validSymbol = validateSymbol(symbol);
 
-      const connector = await getConnectorSafe(args.exchange);
+      const connector = await getConnectorSafe(exchange);
       const [ticker, openOrders] = await Promise.all([
         connector.getTicker(validSymbol),
         connector.getOpenOrders(validSymbol),
@@ -270,6 +255,6 @@ export function registerStrategyTools(server: McpServer, wrappers: X402Wrappers 
           },
         ],
       };
-    })
+    }
   );
 }

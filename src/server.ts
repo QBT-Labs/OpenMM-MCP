@@ -4,19 +4,18 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { registerTools } from './tools/index.js';
 import { registerResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
-import { setupX402 } from './x402-setup.js';
-import type { X402Wrappers } from './x402-setup.js';
+import { TOOL_PRICING, isX402Enabled } from './x402-setup.js';
 
 const SERVER_NAME = 'openmm-mcp-agent';
 const SERVER_VERSION = '0.1.0';
 
-export function createServer(wrappers?: X402Wrappers | null): McpServer {
+export function createServer(): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });
 
-  registerTools(server, wrappers ?? null);
+  registerTools(server);
   registerResources(server);
   registerPrompts(server);
 
@@ -25,50 +24,88 @@ export function createServer(wrappers?: X402Wrappers | null): McpServer {
 
 // Smithery uses this to scan tools/resources without real credentials.
 export function createSandboxServer(): McpServer {
-  return createServer(null);
+  return createServer();
 }
 
-async function startHttpServer(wrappers: X402Wrappers | null): Promise<void> {
+async function startHttpServer(): Promise<void> {
   const { createServer: createHttpServer } = await import('node:http');
-  const { randomUUID } = await import('node:crypto');
-  const { StreamableHTTPServerTransport } =
-    await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
 
-  const server = createServer(wrappers);
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  });
-  await server.connect(transport);
-
+  const server = createServer();
   const port = parseInt(process.env.PORT || '3000', 10);
-  const httpServer = createHttpServer(async (req, res) => {
-    if (req.url === '/health' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok' }));
-      return;
-    }
+  const evmAddress = process.env.X402_EVM_ADDRESS;
 
-    if (req.url === '/mcp') {
-      await transport.handleRequest(req, res);
-      return;
-    }
+  if (isX402Enabled() && evmAddress) {
+    // Use Civic's payment-aware transport — handles 402, verification, settlement at HTTP level
+    const { makePaymentAwareServerTransport } = await import('@civic/x402-mcp');
+    const facilitatorUrl = process.env.X402_FACILITATOR_URL ?? 'https://x402.org/facilitator';
 
-    res.writeHead(404);
-    res.end('Not found');
-  });
+    const transport = makePaymentAwareServerTransport(evmAddress, TOOL_PRICING, {
+      facilitator: { url: facilitatorUrl as `${string}://${string}` },
+      sessionIdGenerator: () => crypto.randomUUID(),
+    });
+    await server.connect(transport);
 
-  httpServer.listen(port, () => {
-    process.stderr.write(`OpenMM MCP HTTP server listening on port ${port}\n`);
-  });
+    const httpServer = createHttpServer(async (req, res) => {
+      if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', x402: true }));
+        return;
+      }
+
+      if (req.url === '/mcp') {
+        await transport.handleRequest(req, res);
+        return;
+      }
+
+      res.writeHead(404);
+      res.end('Not found');
+    });
+
+    httpServer.listen(port, () => {
+      process.stderr.write(`OpenMM MCP HTTP server (x402 enabled) listening on port ${port}\n`);
+      process.stderr.write(`[x402] EVM: ${evmAddress}\n`);
+      process.stderr.write(`[x402] Facilitator: ${facilitatorUrl}\n`);
+      process.stderr.write(`[x402] Paid tools: ${Object.keys(TOOL_PRICING).length}\n`);
+    });
+  } else {
+    // Standard HTTP transport without payment
+    const { StreamableHTTPServerTransport } =
+      await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+    const { randomUUID } = await import('node:crypto');
+
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+    await server.connect(transport);
+
+    const httpServer = createHttpServer(async (req, res) => {
+      if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+        return;
+      }
+
+      if (req.url === '/mcp') {
+        await transport.handleRequest(req, res);
+        return;
+      }
+
+      res.writeHead(404);
+      res.end('Not found');
+    });
+
+    httpServer.listen(port, () => {
+      process.stderr.write(`OpenMM MCP HTTP server listening on port ${port}\n`);
+    });
+  }
 }
 
 async function main(): Promise<void> {
-  const wrappers = await setupX402();
-
   if (process.env.MCP_TRANSPORT === 'http') {
-    await startHttpServer(wrappers);
+    await startHttpServer();
   } else {
-    const server = createServer(wrappers);
+    // Stdio transport — tools always free (no HTTP layer for payment)
+    const server = createServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
   }

@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@3rd-eye-labs/openmm": "0.1.0",
+    "@civic/x402-mcp": "^0.0.7",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
