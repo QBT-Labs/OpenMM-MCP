@@ -14,6 +14,9 @@
     "dev": "ts-node src/index.ts",
     "test": "jest",
     "test:unit": "jest --testPathPattern=unit",
+    "test:x402": "jest --testPathPattern=x402",
+    "test:e2e": "TEST_E2E=true jest --testPathPattern=e2e",
+    "test:x402:live": "npx tsx scripts/test-x402-live.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
@@ -41,20 +44,27 @@
     "url": "https://github.com/QBT-Labs/openMM-MCP.git"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0",
     "@3rd-eye-labs/openmm": "0.1.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "@x402/axios": "^2.6.0",
+    "@x402/core": "^2.6.0",
+    "@x402/evm": "^2.6.0",
+    "@x402/express": "^2.6.0",
+    "viem": "^2.47.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
-    "jest": "^29.0.0",
-    "ts-jest": "^29.0.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.0.0",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.48.0",
     "eslint": "^9.39.1",
-    "prettier": "^3.3.3"
+    "jest": "^29.0.0",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
   }
 }
