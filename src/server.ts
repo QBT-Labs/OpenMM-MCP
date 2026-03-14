@@ -53,7 +53,15 @@ async function startHttpServer(): Promise<void> {
       }
 
       if (req.url === '/mcp') {
-        await transport.handleRequest(req, res);
+        // Parse body so Civic transport can detect paid tool calls
+        if (req.method === 'POST') {
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) chunks.push(chunk as Buffer);
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          await transport.handleRequest(req, res, body);
+        } else {
+          await transport.handleRequest(req, res);
+        }
         return;
       }
 
