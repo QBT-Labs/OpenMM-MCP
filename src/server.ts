@@ -28,9 +28,8 @@ export function createSandboxServer(): McpServer {
 async function startHttpServer(): Promise<void> {
   const { createServer: createHttpServer } = await import('node:http');
   const { randomUUID } = await import('node:crypto');
-  const { StreamableHTTPServerTransport } = await import(
-    '@modelcontextprotocol/sdk/server/streamableHttp.js'
-  );
+  const { StreamableHTTPServerTransport } =
+    await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
 
   const server = createServer();
   const transport = new StreamableHTTPServerTransport({

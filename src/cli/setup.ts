@@ -251,7 +251,9 @@ async function main(): Promise<void> {
       const existingServers = config.mcpServers as Record<string, unknown>;
 
       // Check for existing openmm config and preserve existing keys
-      const existingOpenmm = existingServers['openmm'] as { env?: Record<string, string> } | undefined;
+      const existingOpenmm = existingServers['openmm'] as
+        | { env?: Record<string, string> }
+        | undefined;
       const existingEnv = existingOpenmm?.env || {};
 
       // Merge existing env with new credentials (new values override)
