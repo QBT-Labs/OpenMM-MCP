@@ -39,11 +39,8 @@ async function startHttpServer(): Promise<void> {
     const { makePaymentAwareServerTransport } = await import('@civic/x402-mcp');
     const facilitatorUrl = process.env.X402_FACILITATOR_URL ?? 'https://x402.org/facilitator';
 
-    const transport = makePaymentAwareServerTransport(evmAddress, TOOL_PRICING, {
-      facilitator: { url: facilitatorUrl as `${string}://${string}` },
-      sessionIdGenerator: () => crypto.randomUUID(),
-    });
-    await server.connect(transport);
+    // Per-session transport map for multi-client support
+    const sessions = new Map<string, { transport: ReturnType<typeof makePaymentAwareServerTransport>; server: McpServer }>();
 
     const httpServer = createHttpServer(async (req, res) => {
       if (req.url === '/health' && req.method === 'GET') {
@@ -53,14 +50,48 @@ async function startHttpServer(): Promise<void> {
       }
 
       if (req.url === '/mcp') {
-        // Parse body so Civic transport can detect paid tool calls
+        let body: any;
         if (req.method === 'POST') {
           const chunks: Buffer[] = [];
           for await (const chunk of req) chunks.push(chunk as Buffer);
-          const body = JSON.parse(Buffer.concat(chunks).toString());
-          await transport.handleRequest(req, res, body);
+          body = JSON.parse(Buffer.concat(chunks).toString());
+        }
+
+        // Check if this is a new initialize request (needs new session)
+        const isInit = body && !Array.isArray(body) && body.method === 'initialize';
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+        if (isInit || !sessionId) {
+          // New session: create fresh server + transport
+          const newSessionId = crypto.randomUUID();
+          const transport = makePaymentAwareServerTransport(evmAddress, TOOL_PRICING, {
+            facilitator: { url: facilitatorUrl as `${string}://${string}` },
+            sessionIdGenerator: () => newSessionId,
+          });
+          const newServer = createServer();
+          await newServer.connect(transport);
+
+          // Store session BEFORE handling request so subsequent requests can find it
+          sessions.set(newSessionId, { transport, server: newServer });
+
+          if (body) {
+            await transport.handleRequest(req, res, body);
+          } else {
+            await transport.handleRequest(req, res);
+          }
         } else {
-          await transport.handleRequest(req, res);
+          // Existing session
+          const session = sessions.get(sessionId);
+          if (session) {
+            if (body) {
+              await session.transport.handleRequest(req, res, body);
+            } else {
+              await session.transport.handleRequest(req, res);
+            }
+          } else {
+            res.writeHead(400);
+            res.end('Unknown session');
+          }
         }
         return;
       }

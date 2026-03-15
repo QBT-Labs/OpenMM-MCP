@@ -38,7 +38,7 @@
   ],
   "author": "QBT Labs",
   "license": "MIT",
-  "mcpName": "io.github.adacapo21/openmm-mcp",
+  "_mcpName": "io.github.adacapo21/openmm-mcp",
   "repository": {
     "type": "git",
     "url": "https://github.com/QBT-Labs/openMM-MCP.git"
