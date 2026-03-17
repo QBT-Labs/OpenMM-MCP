@@ -55,7 +55,6 @@ function calculateGridLevels(
 }
 
 export function registerStrategyTools(server: McpServer): void {
-
   server.tool(
     'start_grid_strategy',
     'Calculate and optionally place grid trading orders around the current price',
@@ -86,7 +85,17 @@ export function registerStrategyTools(server: McpServer): void {
         .default(true)
         .describe('Preview grid without placing orders (default: true)'),
     },
-    async ({ exchange, symbol, levels, spacing, orderSize, spacingModel, spacingFactor, sizeModel, dryRun }) => {
+    async ({
+      exchange,
+      symbol,
+      levels,
+      spacing,
+      orderSize,
+      spacingModel,
+      spacingFactor,
+      sizeModel,
+      dryRun,
+    }) => {
       const validExchange = validateExchange(exchange);
       const validSymbol = validateSymbol(symbol);
 

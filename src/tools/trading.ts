@@ -4,7 +4,6 @@ import { ExchangeParam, SymbolParam, validateSymbol } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
 
 export function registerTradingTools(server: McpServer): void {
-
   server.tool(
     'create_order',
     'Create a new order (limit or market) on a supported exchange',

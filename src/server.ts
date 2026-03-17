@@ -70,11 +70,20 @@ async function startHttpServer(): Promise<void> {
         const fakeRes = new ServerResponse(fakeReq);
 
         const responseChunks: Buffer[] = [];
-        fakeRes.write = ((chunk: any) => { responseChunks.push(Buffer.from(chunk)); return true; }) as any;
+        fakeRes.write = ((chunk: any) => {
+          responseChunks.push(Buffer.from(chunk));
+          return true;
+        }) as any;
         let resolveEnd: () => void;
-        const endPromise = new Promise<void>(r => { resolveEnd = r; });
+        const endPromise = new Promise<void>((r) => {
+          resolveEnd = r;
+        });
         const originalEnd = fakeRes.end.bind(fakeRes);
-        fakeRes.end = ((...args: any[]) => { if (args[0]) responseChunks.push(Buffer.from(args[0])); resolveEnd(); return originalEnd(); }) as any;
+        fakeRes.end = ((...args: any[]) => {
+          if (args[0]) responseChunks.push(Buffer.from(args[0]));
+          resolveEnd();
+          return originalEnd();
+        }) as any;
 
         await transport.handleRequest(fakeReq, fakeRes, parsedBody);
         await endPromise;
@@ -113,7 +122,9 @@ async function startHttpServer(): Promise<void> {
         const webResponse = await paymentGatedHandler(webRequest);
 
         const resHeaders: Record<string, string> = {};
-        webResponse.headers.forEach((v, k) => { resHeaders[k] = v; });
+        webResponse.headers.forEach((v, k) => {
+          resHeaders[k] = v;
+        });
         res.writeHead(webResponse.status, resHeaders);
         const responseBody = await webResponse.arrayBuffer();
         res.end(Buffer.from(responseBody));

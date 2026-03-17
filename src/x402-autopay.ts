@@ -1,6 +1,6 @@
 /**
  * x402 Auto-Payment Module
- * 
+ *
  * Handles automatic payment signing and settlement for MCP tools.
  * The server holds the private key and pays on behalf of the user.
  */
@@ -60,7 +60,10 @@ let isEnabled = false;
 function randomNonce(): `0x${string}` {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return ('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
+  return ('0x' +
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')) as `0x${string}`;
 }
 
 function splitSignature(sig: string): { v: number; r: `0x${string}`; s: `0x${string}` } {
@@ -79,7 +82,7 @@ export function initAutoPay(): void {
   const privateKey = process.env.X402_PRIVATE_KEY as `0x${string}` | undefined;
   receiverAddress = process.env.X402_EVM_ADDRESS || null;
   const testnet = process.env.X402_TESTNET === 'true';
-  
+
   if (!privateKey || !receiverAddress) {
     console.error('[x402-autopay] Disabled - X402_PRIVATE_KEY or X402_EVM_ADDRESS not set');
     return;
@@ -87,23 +90,23 @@ export function initAutoPay(): void {
 
   chainId = testnet ? 84532 : 8453;
   const chain = testnet ? baseSepolia : base;
-  
+
   const account = privateKeyToAccount(privateKey);
   payerAddress = account.address;
-  
+
   walletClient = createWalletClient({
     account,
     chain,
     transport: http(),
   });
-  
+
   publicClient = createPublicClient({
     chain,
     transport: http(),
   });
-  
+
   isEnabled = true;
-  
+
   console.error('[x402-autopay] Enabled');
   console.error(`[x402-autopay] Payer: ${payerAddress}`);
   console.error(`[x402-autopay] Receiver: ${receiverAddress}`);
@@ -129,11 +132,11 @@ export function getToolPrice(toolName: string): number {
  */
 export async function executePayment(toolName: string): Promise<PaymentResult> {
   const price = getToolPrice(toolName);
-  
+
   if (price === 0) {
     return { success: true, amount: 0 };
   }
-  
+
   if (!isEnabled || !walletClient || !publicClient || !payerAddress || !receiverAddress) {
     return { success: false, error: 'Auto-pay not configured' };
   }
@@ -147,13 +150,13 @@ export async function executePayment(toolName: string): Promise<PaymentResult> {
   const validAfter = BigInt(0);
   const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
   const nonce = randomNonce();
-  
+
   // Domain name differs between testnet and mainnet
   const domainName = chainId === 84532 ? 'USDC' : 'USD Coin';
 
   try {
     console.error(`[x402-autopay] Signing payment: $${price} for ${toolName}`);
-    
+
     // Sign EIP-3009 authorization
     const signature = await walletClient.signTypedData({
       account: walletClient.account!,
@@ -187,7 +190,7 @@ export async function executePayment(toolName: string): Promise<PaymentResult> {
     const { v, r, s } = splitSignature(signature);
 
     console.error(`[x402-autopay] Executing on-chain transfer...`);
-    
+
     // Execute the transfer
     const txHash = await walletClient.writeContract({
       chain: chainId === 84532 ? baseSepolia : base,
@@ -212,7 +215,7 @@ export async function executePayment(toolName: string): Promise<PaymentResult> {
 
     // Wait for confirmation
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-    
+
     if (receipt.status === 'success') {
       console.error(`[x402-autopay] Confirmed in block ${receipt.blockNumber}`);
       return {

@@ -112,7 +112,6 @@ function matchesToken(pool: any, policyId: string): boolean {
 }
 
 export function registerCardanoTools(server: McpServer): void {
-
   server.tool(
     'get_cardano_price',
     'Get aggregated price for a Cardano native token from DEX liquidity pools (TOKEN/USDT via ADA bridge)',

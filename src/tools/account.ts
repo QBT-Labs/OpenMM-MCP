@@ -4,7 +4,6 @@ import { ExchangeParam, OptionalSymbolParam } from '../utils/index.js';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
 
 export function registerAccountTools(server: McpServer): void {
-
   server.tool(
     'get_balance',
     'Get account balances for all assets (or a specific asset) on a supported exchange',

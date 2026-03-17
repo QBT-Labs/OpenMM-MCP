@@ -9,7 +9,6 @@ const TimeframeParam = z
   .describe('Candlestick timeframe (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)');
 
 export function registerMarketDataTools(server: McpServer): void {
-
   server.tool(
     'get_ticker',
     'Get real-time price, bid/ask, spread, and volume for a trading pair',
