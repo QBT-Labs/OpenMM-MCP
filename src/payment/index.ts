@@ -1,6 +1,15 @@
-export { verifyJWT, fetchPublicKey, clearPublicKeyCache, type JWTClaims } from './jwt-verify.js';
-export { initPaymentClient, isPaymentClientEnabled, requestPaymentJWT } from './payment-client.js';
-export { requiresPayment, wrapServerWithPayment } from './payment-gate.js';
+/**
+ * Payment module
+ *
+ * Delegates to @qbtlabs/x402/split for the split execution flow where
+ * payment verification happens on the remote Worker and tool execution
+ * happens locally with the user's exchange keys.
+ */
+
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { wrapWithSplitPayment } from '@qbtlabs/x402/split';
+
+export type { JWTClaims } from '@qbtlabs/x402/split';
 
 export const TOOL_PRICING: Record<string, number> = {
   list_exchanges: 0,
@@ -20,6 +29,42 @@ export const TOOL_PRICING: Record<string, number> = {
   stop_strategy: 0.01,
 };
 
+const FREE_TOOLS = Object.entries(TOOL_PRICING)
+  .filter(([, price]) => price === 0)
+  .map(([name]) => name);
+
+let paymentEnabled = false;
+
 export function isX402Enabled(): boolean {
   return !!process.env.X402_EVM_ADDRESS;
+}
+
+/**
+ * Check if a wallet private key is available for split execution.
+ * Call before createServer() so isPaymentClientEnabled() is accurate.
+ */
+export function initPaymentClient(): void {
+  paymentEnabled = !!process.env.WALLET_PRIVATE_KEY;
+}
+
+export function isPaymentClientEnabled(): boolean {
+  return paymentEnabled;
+}
+
+/**
+ * Wrap an McpServer with the split payment flow.
+ * Uses @qbtlabs/x402/split — signs EIP-3009 locally, requests JWT from Worker.
+ */
+export function wrapServerWithPayment(server: McpServer): void {
+  const privateKey = process.env.WALLET_PRIVATE_KEY as `0x${string}`;
+  if (!privateKey) return;
+
+  // Cast needed: sidecar uses CJS build of MCP SDK, x402 uses ESM.
+  // Same interface at runtime.
+  wrapWithSplitPayment(server as any, {
+    privateKey,
+    workerUrl: process.env.PAYMENT_SERVER || 'https://mcp.openmm.io',
+    testnet: process.env.X402_TESTNET === 'true',
+    freeTools: FREE_TOOLS,
+  });
 }
