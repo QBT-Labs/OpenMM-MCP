@@ -20,14 +20,14 @@ const SERVER_VERSION = '0.1.0';
  * When `enablePaymentGate` is true the payment wrapper intercepts
  * private tool registrations so they go through the JWT flow.
  */
-export function createServer(enablePaymentGate = false): McpServer {
+export async function createServer(enablePaymentGate = false): Promise<McpServer> {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });
 
   if (enablePaymentGate && isPaymentClientEnabled()) {
-    wrapServerWithPayment(server);
+    await wrapServerWithPayment(server);
     console.error('[server] Payment gate enabled for private tools');
   }
 
@@ -39,7 +39,7 @@ export function createServer(enablePaymentGate = false): McpServer {
 }
 
 // Smithery uses this to scan tools/resources without real credentials.
-export function createSandboxServer(): McpServer {
+export async function createSandboxServer(): Promise<McpServer> {
   return createServer();
 }
 
@@ -48,7 +48,7 @@ async function startHttpServer(): Promise<void> {
   const { StreamableHTTPServerTransport } =
     await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
 
-  const server = createServer();
+  const server = await createServer();
   const port = parseInt(process.env.PORT || '3000', 10);
 
   const transport = new StreamableHTTPServerTransport({
@@ -176,7 +176,7 @@ async function main(): Promise<void> {
   } else {
     // Stdio transport — init payment client for split execution.
     initPaymentClient();
-    const server = createServer(/* enablePaymentGate */ true);
+    const server = await createServer(/* enablePaymentGate */ true);
     const transport = new StdioServerTransport();
     await server.connect(transport);
   }

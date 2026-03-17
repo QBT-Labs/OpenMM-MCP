@@ -73,7 +73,7 @@ export default {
         setToolPrices(TOOL_PRICING as any);
       }
 
-      const server = createServer();
+      const server = await createServer();
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
       });

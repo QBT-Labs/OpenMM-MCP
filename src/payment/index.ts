@@ -7,9 +7,15 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { wrapWithSplitPayment } from '@qbtlabs/x402/split';
 
-export type { JWTClaims } from '@qbtlabs/x402/split';
+export interface JWTClaims {
+  user_id: string;
+  exchange: string;
+  tool: string;
+  issued_at: number;
+  expires_at: number;
+  payment_tx: string;
+}
 
 export const TOOL_PRICING: Record<string, number> = {
   list_exchanges: 0,
@@ -53,14 +59,15 @@ export function isPaymentClientEnabled(): boolean {
 
 /**
  * Wrap an McpServer with the split payment flow.
- * Uses @qbtlabs/x402/split — signs EIP-3009 locally, requests JWT from Worker.
+ * Dynamic import() used because @qbtlabs/x402 is ESM-only and the
+ * sidecar builds to CJS.
  */
-export function wrapServerWithPayment(server: McpServer): void {
+export async function wrapServerWithPayment(server: McpServer): Promise<void> {
   const privateKey = process.env.WALLET_PRIVATE_KEY as `0x${string}`;
   if (!privateKey) return;
 
-  // Cast needed: sidecar uses CJS build of MCP SDK, x402 uses ESM.
-  // Same interface at runtime.
+  const { wrapWithSplitPayment } = await import('@qbtlabs/x402/split');
+
   wrapWithSplitPayment(server as any, {
     privateKey,
     workerUrl: process.env.PAYMENT_SERVER || 'https://mcp.openmm.io',

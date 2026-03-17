@@ -12,7 +12,7 @@
     "build": "tsc --project tsconfig.build.json",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "test": "jest",
+    "test": "MCP_TRANSPORT= jest",
     "test:unit": "jest --testPathPattern=unit",
     "test:x402": "jest --testPathPattern=x402",
     "test:e2e": "TEST_E2E=true jest --testPathPattern=e2e",
