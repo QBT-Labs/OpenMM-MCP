@@ -24,6 +24,10 @@ export async function createServer(enablePaymentGate = false): Promise<McpServer
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
+  }, {
+    capabilities: {
+      logging: {},
+    },
   });
 
   if (enablePaymentGate && isPaymentClientEnabled()) {
