@@ -43,7 +43,7 @@
     "url": "https://github.com/QBT-Labs/openMM-MCP.git"
   },
   "dependencies": {
-    "@3rd-eye-labs/openmm": "^0.1.9",
+    "@3rd-eye-labs/openmm": "^0.1.10",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
