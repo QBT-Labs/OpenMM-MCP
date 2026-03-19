@@ -56,7 +56,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
       "args": ["@qbtlabs/openmm-mcp"],
       "env": {
         "MEXC_API_KEY": "your_mexc_api_key",
-        "MEXC_SECRET_KEY": "your_mexc_secret",
+        "MEXC_SECRET": "your_mexc_secret",
         "GATEIO_API_KEY": "your_gateio_key",
         "GATEIO_SECRET": "your_gateio_secret",
         "KRAKEN_API_KEY": "your_kraken_key",
@@ -86,7 +86,7 @@ Or edit `~/.claude.json`:
       "args": ["@qbtlabs/openmm-mcp"],
       "env": {
         "MEXC_API_KEY": "your_key",
-        "MEXC_SECRET_KEY": "your_secret"
+        "MEXC_SECRET": "your_secret"
       }
     }
   }
@@ -105,7 +105,7 @@ Add to `.cursor/mcp.json` in your project:
       "args": ["@qbtlabs/openmm-mcp"],
       "env": {
         "MEXC_API_KEY": "your_key",
-        "MEXC_SECRET_KEY": "your_secret"
+        "MEXC_SECRET": "your_secret"
       }
     }
   }
@@ -124,7 +124,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
       "args": ["@qbtlabs/openmm-mcp"],
       "env": {
         "MEXC_API_KEY": "your_key",
-        "MEXC_SECRET_KEY": "your_secret"
+        "MEXC_SECRET": "your_secret"
       }
     }
   }
@@ -135,7 +135,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 
 | Exchange | Required Environment Variables |
 |----------|-------------------------------|
-| **MEXC** | `MEXC_API_KEY`, `MEXC_SECRET_KEY` |
+| **MEXC** | `MEXC_API_KEY`, `MEXC_SECRET` |
 | **Gate.io** | `GATEIO_API_KEY`, `GATEIO_SECRET` |
 | **Kraken** | `KRAKEN_API_KEY`, `KRAKEN_SECRET` |
 | **Bitget** | `BITGET_API_KEY`, `BITGET_SECRET`, `BITGET_PASSPHRASE` |
@@ -333,7 +333,7 @@ cd openmm-mcp-worker
 wrangler secret put X402_EVM_ADDRESS
 wrangler secret put X402_PRIVATE_KEY
 wrangler secret put MEXC_API_KEY
-wrangler secret put MEXC_SECRET_KEY
+wrangler secret put MEXC_SECRET
 # ... add other exchange keys
 
 # Deploy
@@ -356,7 +356,7 @@ docker build -t openmm-mcp .
 docker run -p 3000:3000 \
   -e MCP_TRANSPORT=http \
   -e MEXC_API_KEY=your_key \
-  -e MEXC_SECRET_KEY=your_secret \
+  -e MEXC_SECRET=your_secret \
   openmm-mcp
 ```
 

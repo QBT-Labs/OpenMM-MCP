@@ -8,6 +8,7 @@ jest.mock('@3rd-eye-labs/openmm', () => ({
     isSupported: jest.fn().mockReturnValue(true),
     getSupportedExchanges: jest.fn().mockReturnValue(['mexc', 'gateio', 'bitget', 'kraken']),
     getExchange: jest.fn(),
+    clearAllConnectors: jest.fn(),
   },
 }));
 

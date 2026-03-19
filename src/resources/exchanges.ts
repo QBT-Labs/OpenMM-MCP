@@ -5,7 +5,7 @@ const EXCHANGES_DATA = {
     {
       id: 'mexc',
       name: 'MEXC',
-      credentials: ['MEXC_API_KEY', 'MEXC_SECRET_KEY'],
+      credentials: ['MEXC_API_KEY', 'MEXC_SECRET'],
       features: ['spot trading', 'market data', 'websocket streams'],
       minOrderValue: '1 USDT',
     },

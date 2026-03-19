@@ -16,6 +16,7 @@ export function validateExchange(exchange: string): SupportedExchange {
 export async function getConnectorSafe(exchange: string): Promise<BaseExchangeConnector> {
   const validExchange = validateExchange(exchange);
   const { ExchangeFactory } = await import('@3rd-eye-labs/openmm');
+
   try {
     return await ExchangeFactory.getExchange(validExchange as any);
   } catch (error) {
