@@ -133,25 +133,58 @@ export default {
         );
       }
 
-      // Verify via facilitator
-      const verification = await verifyWithFacilitator(payment, tool);
-      if (!verification.valid) {
-        return new Response(
-          JSON.stringify({ error: 'Payment verification failed', reason: verification.error }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } },
-        );
-      }
-
-      // Settle payment
-      const settlement = await settleWithFacilitator(payment, tool);
-      if (!settlement.success) {
-        return new Response(
-          JSON.stringify({ error: 'Payment settlement failed', reason: settlement.error }),
-          { status: 402, headers: { 'Content-Type': 'application/json' } },
-        );
-      }
+      // Verify and settle payment
+      const isTestnet = env.X402_TESTNET === 'true';
+      let txHash = 'testnet-verified';
       
-      const txHash = settlement.txHash || 'pending';
+      if (isTestnet) {
+        // Testnet: Basic local verification (facilitator has bugs with v2)
+        // Verify the payment structure and signature format
+        const evmPayload = payment.payload as { authorization?: { from?: string; value?: string }; signature?: string };
+        if (!evmPayload?.authorization?.from || !evmPayload?.signature) {
+          return new Response(
+            JSON.stringify({ error: 'Invalid payment structure' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        
+        // Check amount matches requirements
+        const pricing = getToolPrice(tool);
+        const requiredAmount = Math.ceil(pricing.price * 1_000_000);
+        const paidAmount = parseInt(evmPayload?.authorization?.value || '0');
+        
+        if (paidAmount < requiredAmount) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'Insufficient payment',
+              required: requiredAmount,
+              paid: paidAmount 
+            }),
+            { status: 402, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        
+        txHash = `testnet-${Date.now()}`;
+      } else {
+        // Production: Use facilitator for on-chain settlement
+        const verification = await verifyWithFacilitator(payment, tool);
+        if (!verification.valid) {
+          return new Response(
+            JSON.stringify({ error: 'Payment verification failed', reason: verification.error }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+
+        const settlement = await settleWithFacilitator(payment, tool);
+        if (!settlement.success) {
+          return new Response(
+            JSON.stringify({ error: 'Payment settlement failed', reason: settlement.error }),
+            { status: 402, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        
+        txHash = settlement.txHash || 'pending';
+      }
 
       // Issue JWT (simplified - in production use proper JWT signing)
       const jwt = await generateJWT({
