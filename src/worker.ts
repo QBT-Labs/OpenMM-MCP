@@ -86,9 +86,9 @@ export default {
 
     // Split payment verification endpoint
     if (url.pathname === '/verify-payment' && request.method === 'POST') {
-      const { configure, setToolPrices, getToolPrice, buildPaymentRequirements } = await import('@qbtlabs/x402');
+      const { configure, setToolPrices, getToolPrice } = await import('@qbtlabs/x402');
       const { parsePaymentHeader } = await import('@qbtlabs/x402');
-      const { verifyWithFacilitator, settleWithFacilitator } = await import('@qbtlabs/x402');
+      const { verifyWithFacilitator, settleWithFacilitator, buildFacilitatorRequirements } = await import('@qbtlabs/x402');
       const { TOOL_PRICING } = await import('./payment/index.js');
 
       // Configure x402
@@ -109,7 +109,7 @@ export default {
       // No payment → return 402 with requirements
       if (!paymentHeader) {
         const pricing = getToolPrice(tool);
-        const requirements = buildPaymentRequirements(pricing.price);
+        const requirements = buildFacilitatorRequirements(tool);
         
         return new Response(
           JSON.stringify({
