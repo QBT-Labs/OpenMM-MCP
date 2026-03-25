@@ -5,6 +5,44 @@ interface Env {
   [key: string]: string | undefined;
 }
 
+interface JWTPayload {
+  tool: string;
+  exchange: string;
+  payment_tx: string;
+  issued_at: number;
+  expires_at: number;
+}
+
+/**
+ * Generate a signed JWT for tool access.
+ * In production, use AWS KMS or similar HSM for signing.
+ */
+async function generateJWT(payload: JWTPayload, env: Env): Promise<string> {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const secret = env.JWT_SECRET || 'development-secret-change-in-production';
+  
+  const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, '');
+  const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '');
+  
+  const data = `${encodedHeader}.${encodedPayload}`;
+  
+  // Use Web Crypto API for HMAC-SHA256
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
+  const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g, '');
+  
+  return `${data}.${encodedSignature}`;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -44,6 +82,88 @@ export default {
       return new Response(JSON.stringify(card), {
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    // Split payment verification endpoint
+    if (url.pathname === '/verify-payment' && request.method === 'POST') {
+      const { configure, setToolPrices, getToolPrice, buildPaymentRequirements } = await import('@qbtlabs/x402');
+      const { parsePaymentHeader } = await import('@qbtlabs/x402');
+      const { verifyWithFacilitator, settleWithFacilitator } = await import('@qbtlabs/x402');
+      const { TOOL_PRICING } = await import('./payment/index.js');
+
+      // Configure x402
+      if (env.X402_EVM_ADDRESS) {
+        configure({
+          evm: { address: env.X402_EVM_ADDRESS },
+          testnet: env.X402_TESTNET === 'true',
+        });
+        setToolPrices(TOOL_PRICING as any);
+      }
+
+      const body = await request.json() as { tool?: string; exchange?: string };
+      const tool = body.tool || 'unknown';
+      const exchange = body.exchange || '';
+
+      const paymentHeader = request.headers.get('X-PAYMENT');
+
+      // No payment → return 402 with requirements
+      if (!paymentHeader) {
+        const pricing = getToolPrice(tool);
+        const requirements = buildPaymentRequirements(pricing.price);
+        
+        return new Response(
+          JSON.stringify({
+            error: 'Payment Required',
+            price: pricing.price,
+            ...requirements,
+          }),
+          {
+            status: 402,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+
+      // Parse payment
+      const payment = parsePaymentHeader(paymentHeader);
+      if (!payment) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid payment header format' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // Verify via facilitator
+      const verification = await verifyWithFacilitator(payment, tool);
+      if (!verification.valid) {
+        return new Response(
+          JSON.stringify({ error: 'Payment verification failed', reason: verification.error }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // Settle payment
+      const settlement = await settleWithFacilitator(payment, tool);
+      if (!settlement.success) {
+        return new Response(
+          JSON.stringify({ error: 'Payment settlement failed', reason: settlement.error }),
+          { status: 402, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // Issue JWT (simplified - in production use proper JWT signing)
+      const jwt = await generateJWT({
+        tool,
+        exchange,
+        payment_tx: settlement.txHash || 'pending',
+        issued_at: Math.floor(Date.now() / 1000),
+        expires_at: Math.floor(Date.now() / 1000) + 300,
+      }, env);
+
+      return new Response(
+        JSON.stringify({ jwt, txHash: settlement.txHash }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     }
 
     if (url.pathname === '/mcp') {
