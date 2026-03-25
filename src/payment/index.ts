@@ -22,26 +22,27 @@ export interface JWTClaims {
   payment_tx: string;
 }
 
-export const TOOL_PRICING: Record<string, number> = {
-  list_exchanges: 0,
-  get_ticker: 0.001,
-  get_orderbook: 0.001,
-  get_trades: 0.001,
-  get_ohlcv: 0.001,
-  get_balance: 0.001,
-  list_orders: 0.001,
-  get_cardano_price: 0.001,
-  discover_pools: 0.001,
-  get_strategy_status: 0.001,
-  create_order: 0.01,
-  cancel_order: 0.01,
-  cancel_all_orders: 0.01,
-  start_grid_strategy: 0.01,
-  stop_strategy: 0.01,
+// Tool pricing in USD - format expected by x402 setToolPrices
+export const TOOL_PRICING: Record<string, { tier: string; price: number }> = {
+  list_exchanges: { tier: 'free', price: 0 },
+  get_ticker: { tier: 'read', price: 0.001 },
+  get_orderbook: { tier: 'read', price: 0.001 },
+  get_trades: { tier: 'read', price: 0.001 },
+  get_ohlcv: { tier: 'read', price: 0.001 },
+  get_balance: { tier: 'read', price: 0.001 },
+  list_orders: { tier: 'read', price: 0.001 },
+  get_cardano_price: { tier: 'read', price: 0.001 },
+  discover_pools: { tier: 'read', price: 0.001 },
+  get_strategy_status: { tier: 'read', price: 0.001 },
+  create_order: { tier: 'write', price: 0.01 },
+  cancel_order: { tier: 'write', price: 0.01 },
+  cancel_all_orders: { tier: 'write', price: 0.01 },
+  start_grid_strategy: { tier: 'write', price: 0.01 },
+  stop_strategy: { tier: 'write', price: 0.01 },
 };
 
 const FREE_TOOLS = Object.entries(TOOL_PRICING)
-  .filter(([, price]) => price === 0)
+  .filter(([, pricing]) => pricing.price === 0)
   .map(([name]) => name);
 
 let paymentEnabled = false;

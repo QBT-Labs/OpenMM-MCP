@@ -10,6 +10,7 @@ routes = [
 [vars]
 X402_TESTNET = "true"
 X402_FACILITATOR_URL = "https://x402.org/facilitator"
+X402_EVM_ADDRESS = "0x5c19cdCF51af3C38Ef23d7497AB88564C5b9e29E"
 
 [alias]
 winston = "./src/shims/winston.ts"
