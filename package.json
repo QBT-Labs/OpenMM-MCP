@@ -7,7 +7,8 @@
   "bin": {
     "openmm-mcp": "dist/index.js",
     "qbtlabs-openmm-mcp": "dist/index.js",
-    "openmm-vault": "dist/vault/cli.js"
+    "openmm-vault": "dist/vault/cli.js",
+    "openmm-creds": "dist/credentials/cli.js"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",

@@ -1,10 +1,12 @@
 /**
- * Vault Loader
+ * Vault/Credentials Loader
  * 
- * Loads exchange credentials from vault and sets them as env vars
- * for compatibility with the OpenMM SDK (which expects env vars).
+ * Loads exchange credentials and sets them as env vars.
  * 
- * This runs at MCP server startup BEFORE exchange connections are made.
+ * Priority:
+ * 1. Credentials Server (via IPC socket) - SECURE, recommended
+ * 2. Vault with password env var - Less secure, for backward compatibility
+ * 3. Direct env vars - Legacy mode
  */
 
 import { Vault } from './vault.js';
@@ -22,25 +24,68 @@ const ENV_VAR_MAP: Record<ExchangeId, { key: string; secret: string; passphrase?
 };
 
 /**
- * Load credentials from vault and set as environment variables.
- * 
- * @param password - Vault password (from env or prompt)
- * @returns List of exchanges loaded
+ * Load credentials from credentials server (most secure)
  */
-export async function loadVaultCredentials(password?: string): Promise<string[]> {
+async function loadFromCredentialsServer(): Promise<string[] | null> {
+  try {
+    const { CredentialsClient } = await import('../credentials/client.js');
+    const client = new CredentialsClient();
+    
+    if (!client.isAvailable()) {
+      return null;
+    }
+    
+    const healthy = await client.health();
+    if (!healthy) {
+      console.log('⚠️  Credentials server not responding');
+      return null;
+    }
+    
+    const exchanges = await client.listExchanges();
+    const loaded: string[] = [];
+    
+    for (const exchangeId of exchanges) {
+      const envVars = ENV_VAR_MAP[exchangeId as ExchangeId];
+      if (!envVars) continue;
+      
+      try {
+        const creds = await client.getCredentials(exchangeId);
+        
+        process.env[envVars.key] = creds.apiKey;
+        process.env[envVars.secret] = creds.secret;
+        
+        if (envVars.passphrase && creds.passphrase) {
+          process.env[envVars.passphrase] = creds.passphrase;
+        }
+        
+        loaded.push(exchangeId);
+      } catch {
+        console.log(`⚠️  Failed to get credentials for ${exchangeId}`);
+      }
+    }
+    
+    if (loaded.length > 0) {
+      console.log(`🔐 Loaded credentials from server: ${loaded.join(', ')}`);
+    }
+    
+    return loaded;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load credentials from vault (requires password in env)
+ */
+async function loadFromVault(): Promise<string[]> {
   const vault = new Vault();
   
   if (!vault.exists()) {
-    console.log('⚠️  No OpenMM vault found at', vault.getPath());
-    console.log('   Create one with: openmm-vault init && openmm-vault add <exchange>');
     return [];
   }
   
-  // Get password from env if not provided
-  const vaultPassword = password || process.env.OPENMM_VAULT_PASSWORD;
+  const vaultPassword = process.env.OPENMM_VAULT_PASSWORD;
   if (!vaultPassword) {
-    console.log('⚠️  No vault password provided');
-    console.log('   Set OPENMM_VAULT_PASSWORD env var or start signer interactively');
     return [];
   }
   
@@ -61,7 +106,6 @@ export async function loadVaultCredentials(password?: string): Promise<string[]>
     const envVars = ENV_VAR_MAP[exchangeId];
     if (!envVars) continue;
     
-    // Set env vars
     process.env[envVars.key] = creds.apiKey;
     process.env[envVars.secret] = creds.secret;
     
@@ -72,7 +116,7 @@ export async function loadVaultCredentials(password?: string): Promise<string[]>
     loaded.push(exchangeId);
   }
   
-  vault.lock(); // Clear from memory
+  vault.lock();
   
   if (loaded.length > 0) {
     console.log(`🔐 Loaded credentials from vault: ${loaded.join(', ')}`);
@@ -82,9 +126,54 @@ export async function loadVaultCredentials(password?: string): Promise<string[]>
 }
 
 /**
- * Check if vault credentials are available (without unlocking)
+ * Load exchange credentials.
+ * Tries credentials server first, then vault, then falls back to env vars.
+ */
+export async function loadVaultCredentials(): Promise<string[]> {
+  // Try credentials server first (most secure)
+  const fromServer = await loadFromCredentialsServer();
+  if (fromServer !== null) {
+    return fromServer;
+  }
+  
+  // Fall back to vault with password env var
+  const fromVault = await loadFromVault();
+  if (fromVault.length > 0) {
+    return fromVault;
+  }
+  
+  // Check if legacy env vars are set
+  const legacyExchanges: string[] = [];
+  for (const [exchangeId, envVars] of Object.entries(ENV_VAR_MAP)) {
+    if (process.env[envVars.key] && process.env[envVars.secret]) {
+      legacyExchanges.push(exchangeId);
+    }
+  }
+  
+  if (legacyExchanges.length > 0) {
+    console.log(`📋 Using legacy env vars for: ${legacyExchanges.join(', ')}`);
+  }
+  
+  return legacyExchanges;
+}
+
+/**
+ * Check if credentials are available (any source)
  */
 export function isVaultAvailable(): boolean {
   const vault = new Vault();
   return vault.exists();
+}
+
+/**
+ * Check if credentials server is available
+ */
+export async function isCredentialsServerAvailable(): Promise<boolean> {
+  try {
+    const { CredentialsClient } = await import('../credentials/client.js');
+    const client = new CredentialsClient();
+    return client.isAvailable() && await client.health();
+  } catch {
+    return false;
+  }
 }

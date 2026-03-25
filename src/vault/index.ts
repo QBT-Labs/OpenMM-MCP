@@ -5,7 +5,7 @@
  */
 
 export { Vault, createVault, wipeBuffer } from './vault.js';
-export { loadVaultCredentials, isVaultAvailable } from './loader.js';
+export { loadVaultCredentials, isVaultAvailable, isCredentialsServerAvailable } from './loader.js';
 export type {
   VaultData,
   VaultConfig,
