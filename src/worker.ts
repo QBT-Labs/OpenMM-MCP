@@ -133,42 +133,25 @@ export default {
         );
       }
 
-      // For testnet: Skip facilitator, verify signature locally
-      const isTestnet = env.X402_TESTNET === 'true';
-      let txHash = 'testnet-mock-tx';
-      
-      if (isTestnet) {
-        // Basic validation for testnet
-        const { verifyPayment } = await import('@qbtlabs/x402');
-        const pricing = getToolPrice(tool);
-        const verification = await verifyPayment(payment, pricing.price);
-        
-        if (!verification.valid) {
-          return new Response(
-            JSON.stringify({ error: 'Payment verification failed', reason: verification.error }),
-            { status: 403, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-      } else {
-        // Production: Use facilitator
-        const verification = await verifyWithFacilitator(payment, tool);
-        if (!verification.valid) {
-          return new Response(
-            JSON.stringify({ error: 'Payment verification failed', reason: verification.error }),
-            { status: 403, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-
-        // Settle payment
-        const settlement = await settleWithFacilitator(payment, tool);
-        if (!settlement.success) {
-          return new Response(
-            JSON.stringify({ error: 'Payment settlement failed', reason: settlement.error }),
-            { status: 402, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        txHash = settlement.txHash || 'pending';
+      // Verify via facilitator
+      const verification = await verifyWithFacilitator(payment, tool);
+      if (!verification.valid) {
+        return new Response(
+          JSON.stringify({ error: 'Payment verification failed', reason: verification.error }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        );
       }
+
+      // Settle payment
+      const settlement = await settleWithFacilitator(payment, tool);
+      if (!settlement.success) {
+        return new Response(
+          JSON.stringify({ error: 'Payment settlement failed', reason: settlement.error }),
+          { status: 402, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      
+      const txHash = settlement.txHash || 'pending';
 
       // Issue JWT (simplified - in production use proper JWT signing)
       const jwt = await generateJWT({
