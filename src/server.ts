@@ -188,6 +188,16 @@ async function startHttpServer(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Load exchange credentials from vault (if available)
+  try {
+    const { loadVaultCredentials, isVaultAvailable } = await import('./vault/loader.js');
+    if (isVaultAvailable()) {
+      await loadVaultCredentials();
+    }
+  } catch {
+    // Vault module not available or error — continue with env vars
+  }
+
   if (process.env.MCP_TRANSPORT === 'http') {
     await startHttpServer();
   } else {
