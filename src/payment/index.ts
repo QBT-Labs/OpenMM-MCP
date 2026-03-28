@@ -1,14 +1,9 @@
 /**
  * Payment module
  *
- * Supports two modes:
- * 1. Direct key mode: Uses WALLET_PRIVATE_KEY env var (legacy)
- * 2. Signer mode: Uses isolated x402-signer process (secure)
- *
- * Signer mode keeps private keys in a separate process with:
- * - Encrypted vault storage
- * - Policy enforcement (spending limits)
- * - Process isolation (keys never in agent memory)
+ * Uses the unified IPC socket for payment signing.
+ * The MCP process never holds private keys — it delegates signing
+ * to the `openmm serve` process via /tmp/openmm.sock.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -46,119 +41,66 @@ const FREE_TOOLS = Object.entries(TOOL_PRICING)
   .map(([name]) => name);
 
 let paymentEnabled = false;
-let signerEnabled = false;
 
 export function isX402Enabled(): boolean {
-  return !!process.env.X402_EVM_ADDRESS;
+  // HTTP mode: x402 is enabled when PAYMENT_SERVER is configured
+  return process.env.MCP_TRANSPORT === 'http' && !!process.env.PAYMENT_SERVER;
 }
 
 /**
- * Check if payment capabilities are available.
- * Supports both direct key mode and signer mode.
+ * Check if the unified IPC socket is available for signing.
  */
-export function initPaymentClient(): void {
-  // Direct key mode (legacy)
-  paymentEnabled = !!process.env.WALLET_PRIVATE_KEY;
-  
-  // Signer mode (secure) - check if signer socket exists
-  const signerSocket = process.env.X402_SIGNER_SOCKET || '/tmp/x402-signer.sock';
-  const fs = require('fs');
-  if (fs.existsSync(signerSocket)) {
-    signerEnabled = true;
-    console.log(`🔐 x402 signer mode enabled (${signerSocket})`);
+export async function initPaymentClient(): Promise<void> {
+  const { existsSync } = await import('fs');
+  const socketPath = process.env.OPENMM_SOCKET || '/tmp/openmm.sock';
+  if (existsSync(socketPath)) {
+    paymentEnabled = true;
+    console.log(`🔐 Payment signing via socket (${socketPath})`);
   }
 }
 
 export function isPaymentClientEnabled(): boolean {
-  return paymentEnabled || signerEnabled;
-}
-
-export function isSignerEnabled(): boolean {
-  return signerEnabled;
+  return paymentEnabled;
 }
 
 /**
  * Wrap an McpServer with the split payment flow.
- * Uses isolated signer if available, otherwise falls back to direct key.
+ * Uses UnifiedIPCClient for signing — private key never in this process.
  */
 export async function wrapServerWithPayment(server: McpServer): Promise<void> {
   const workerUrl = process.env.PAYMENT_SERVER || 'https://mcp.openmm.io';
   const testnet = process.env.X402_TESTNET === 'true';
-  
-  // Try signer mode first (more secure)
-  if (signerEnabled) {
-    await wrapWithSignerMode(server, { workerUrl, testnet });
-    return;
+
+  const { UnifiedIPCClient } = await import('../ipc/client.js');
+  const client = new UnifiedIPCClient();
+
+  try {
+    await client.connect();
+    const status = await client.ping();
+
+    if (!status.wallet) {
+      console.error('⚠️  No wallet in unified socket — payment signing disabled');
+      client.disconnect();
+      return;
+    }
+
+    console.log(`✅ Payment signer connected, address: ${status.wallet}`);
+
+    const { wrapWithSplitPayment } = await import('@qbtlabs/x402/split');
+
+    wrapWithSplitPayment(server as any, {
+      signer: {
+        address: status.wallet,
+        sign: async (payload: { to: string; amount: string; chainId: number }) => {
+          return client.signPayment(payload);
+        },
+      },
+      workerUrl,
+      testnet,
+      freeTools: FREE_TOOLS,
+    });
+  } catch (error) {
+    console.error('⚠️  Payment socket unavailable:', (error as Error).message);
+    client.disconnect();
   }
-  
-  // Fall back to direct key mode
-  const privateKey = process.env.WALLET_PRIVATE_KEY as `0x${string}`;
-  if (!privateKey) return;
-
-  const { wrapWithSplitPayment } = await import('@qbtlabs/x402/split');
-
-  wrapWithSplitPayment(server as any, {
-    privateKey,
-    workerUrl,
-    testnet,
-    freeTools: FREE_TOOLS,
-  });
-}
-
-/**
- * Wrap server with signer mode (isolated key management)
- */
-async function wrapWithSignerMode(
-  server: McpServer,
-  options: { workerUrl: string; testnet: boolean }
-): Promise<void> {
-  const { createSignerClient } = await import('@qbtlabs/x402');
-  
-  const signerSocket = process.env.X402_SIGNER_SOCKET || '/tmp/x402-signer.sock';
-  const client = await createSignerClient({ socketPath: signerSocket });
-  
-  // Verify signer is available
-  if (!client) {
-    console.error('❌ x402 signer not available at', signerSocket);
-    console.error('   Start with: npx tsx src/scripts/signer-cli.ts start');
-    return;
-  }
-  
-  // Get wallet address from signer (no key exposure)
-  const address = await client.getAddress();
-  console.log(`✅ x402 signer connected, address: ${address}`);
-  
-  // Store signer client for later use
-  (server as any)._signerClient = client;
-  (server as any)._signerAddress = address;
-  
-  // Import the split payment wrapper with signer support
-  const { wrapWithSplitPayment } = await import('@qbtlabs/x402/split');
-  
-  wrapWithSplitPayment(server as any, {
-    // Use signer for signing instead of raw key
-    signer: {
-      address,
-      sign: async (payload: { to: string; amount: string; chainId: number }) => {
-        return client.sign(payload);
-      }
-    },
-    workerUrl: options.workerUrl,
-    testnet: options.testnet,
-    freeTools: FREE_TOOLS,
-  });
-}
-
-/**
- * Get the signer client if available
- */
-export function getSignerClient(server: McpServer): any | null {
-  return (server as any)._signerClient || null;
-}
-
-/**
- * Get the signer address if available
- */
-export function getSignerAddress(server: McpServer): string | null {
-  return (server as any)._signerAddress || null;
 }

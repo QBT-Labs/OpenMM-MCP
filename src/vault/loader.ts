@@ -1,12 +1,16 @@
 /**
  * Vault Loader
  *
- * Loads exchange and wallet credentials from the unified vault and sets
- * them as env vars for compatibility with the OpenMM SDK and x402 payment.
+ * Loads exchange credentials from the unified IPC socket and sets them as
+ * env vars for compatibility with the OpenMM SDK (which expects env vars).
+ *
+ * Wallet credentials are NOT loaded into env vars — the MCP process signs
+ * payments by calling UnifiedIPCClient.signPayment(), so the private key
+ * never enters this process.
  *
  * Priority:
- * 1. Credentials Server (socket) - most secure
- * 2. Direct vault unlock (password from env) - fallback
+ * 1. Unified IPC socket (OPENMM_SOCKET) — most secure, recommended
+ * 2. Direct vault unlock (password from env) — fallback for development
  */
 
 import { Vault } from './vault.js';
@@ -41,11 +45,11 @@ function setExchangeEnvVars(exchangeId: string, creds: { apiKey: string; secret:
 }
 
 /**
- * Load credentials from the credentials server (most secure)
+ * Load credentials from the unified IPC socket (most secure)
  */
-async function loadFromCredentialsServer(): Promise<string[]> {
-  const { CredentialsClient } = await import('../credentials/client.js');
-  const client = new CredentialsClient();
+async function loadFromSocket(): Promise<string[]> {
+  const { UnifiedIPCClient } = await import('../ipc/client.js');
+  const client = new UnifiedIPCClient();
 
   if (!client.isAvailable()) {
     return [];
@@ -68,18 +72,19 @@ async function loadFromCredentialsServer(): Promise<string[]> {
     client.disconnect();
 
     if (loaded.length > 0) {
-      console.error(`🔐 Loaded credentials from server: ${loaded.join(', ')}`);
+      console.error(`🔐 Loaded credentials from socket: ${loaded.join(', ')}`);
     }
 
     return loaded;
   } catch (error) {
-    console.error('⚠️  Credentials server connection failed:', (error as Error).message);
+    console.error('⚠️  Socket connection failed:', (error as Error).message);
     return [];
   }
 }
 
 /**
- * Load credentials directly from unified vault (fallback, requires password in env)
+ * Load credentials directly from vault (fallback, requires password in env)
+ * Note: wallet credentials are NOT loaded into env vars in this path either.
  */
 async function loadFromVaultDirect(password: string): Promise<string[]> {
   const vault = new Vault();
@@ -97,7 +102,6 @@ async function loadFromVaultDirect(password: string): Promise<string[]> {
 
   const loaded: string[] = [];
 
-  // Load exchange credentials
   const exchanges = vault.listExchanges();
   for (const exchangeId of exchanges) {
     const creds = vault.getExchange(exchangeId);
@@ -105,14 +109,6 @@ async function loadFromVaultDirect(password: string): Promise<string[]> {
     if (setExchangeEnvVars(exchangeId, creds)) {
       loaded.push(exchangeId);
     }
-  }
-
-  // Load wallet credentials
-  const wallet = vault.getWallet();
-  if (wallet) {
-    process.env.WALLET_PRIVATE_KEY = wallet.privateKey;
-    process.env.X402_EVM_ADDRESS = wallet.address;
-    loaded.push('wallet');
   }
 
   vault.lock();
@@ -125,13 +121,13 @@ async function loadFromVaultDirect(password: string): Promise<string[]> {
 }
 
 /**
- * Load credentials (tries credentials server first, then vault direct)
+ * Load credentials (tries IPC socket first, then vault direct)
  */
 export async function loadVaultCredentials(password?: string): Promise<string[]> {
-  // Try credentials server first (most secure)
-  const fromServer = await loadFromCredentialsServer();
-  if (fromServer.length > 0) {
-    return fromServer;
+  // Try unified socket first (most secure)
+  const fromSocket = await loadFromSocket();
+  if (fromSocket.length > 0) {
+    return fromSocket;
   }
 
   // Fallback to direct vault (less secure, needs password in env)
@@ -147,7 +143,7 @@ export async function loadVaultCredentials(password?: string): Promise<string[]>
 }
 
 /**
- * Check if vault or credentials server is available
+ * Check if vault or socket is available
  */
 export function isVaultAvailable(): boolean {
   const vault = new Vault();

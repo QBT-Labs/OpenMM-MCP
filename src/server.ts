@@ -67,8 +67,26 @@ async function startHttpServer(): Promise<void> {
     const { configure, setToolPrices } = await import('@qbtlabs/x402');
     const { withX402Server } = await import('@qbtlabs/x402/transport');
 
+    // Get wallet address from IPC socket if available, otherwise skip
+    const { UnifiedIPCClient } = await import('./ipc/client.js');
+    const ipcClient = new UnifiedIPCClient();
+    let walletAddress: string | undefined;
+    try {
+      await ipcClient.connect();
+      const status = await ipcClient.ping();
+      walletAddress = status.wallet ?? undefined;
+      ipcClient.disconnect();
+    } catch {
+      // Socket not available — x402 won't work without an address
+    }
+
+    if (!walletAddress) {
+      console.error('⚠️  No wallet address available — x402 HTTP mode disabled');
+      // Fall through to standard HTTP server below
+    }
+
     configure({
-      evm: { address: process.env.X402_EVM_ADDRESS! },
+      evm: { address: walletAddress || '' },
       testnet: process.env.X402_TESTNET === 'true',
     });
     setToolPrices(TOOL_PRICING as any);
@@ -159,7 +177,7 @@ async function startHttpServer(): Promise<void> {
 
     httpServer.listen(port, () => {
       process.stderr.write(`OpenMM MCP HTTP server (x402 enabled) listening on port ${port}\n`);
-      process.stderr.write(`[x402] EVM: ${process.env.X402_EVM_ADDRESS}\n`);
+      process.stderr.write(`[x402] EVM: ${walletAddress || '(none)'}\n`);
       process.stderr.write(`[x402] Testnet: ${process.env.X402_TESTNET ?? 'false'}\n`);
       process.stderr.write(`[x402] Paid tools: ${Object.keys(TOOL_PRICING).length}\n`);
     });
@@ -202,7 +220,7 @@ async function main(): Promise<void> {
     await startHttpServer();
   } else {
     // Stdio transport — init payment client for split execution.
-    initPaymentClient();
+    await initPaymentClient();
     const server = await createServer(/* enablePaymentGate */ true);
     const transport = new StdioServerTransport();
     await server.connect(transport);
