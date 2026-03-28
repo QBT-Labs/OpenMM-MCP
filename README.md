@@ -25,11 +25,16 @@ MCP server for [OpenMM](https://github.com/3rd-Eye-Labs/OpenMM) — exposes mark
 
 ## Local Setup
 
-### 1. Install
+**Prerequisites:** Node.js 20 or later.
+
+### 1. Install and configure
 
 ```bash
 npm install -g @qbtlabs/openmm-mcp
+openmm-mcp --setup
 ```
+
+The setup wizard writes the correct MCP config for your client (Claude Desktop, Claude Code, Cursor, Windsurf). No credentials are stored in config files — only the socket path.
 
 ### 2. Initialize encrypted vault
 
@@ -39,15 +44,7 @@ openmm-init
 
 This creates an encrypted vault at `~/.openmm/vault.enc` containing your wallet key and exchange API credentials. You'll set a password, generate (or import) a wallet, and optionally add exchange keys.
 
-### 3. Configure your client
-
-```bash
-npx @qbtlabs/openmm-mcp --setup
-```
-
-Select which MCP clients to configure. The wizard automatically writes the correct config to each client's config file.
-
-### 4. Start the server
+### 3. Start the server
 
 ```bash
 openmm serve
