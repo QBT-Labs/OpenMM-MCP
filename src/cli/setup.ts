@@ -147,9 +147,12 @@ async function main(): Promise<void> {
 
       const servers = config.mcpServers as Record<string, unknown>;
 
+      const nodeBin = process.execPath;
+      const indexPath = path.resolve(__dirname, '..', 'index.js');
+
       servers['openmm'] = {
-        command: 'npx',
-        args: ['-y', '@qbtlabs/openmm-mcp'],
+        command: nodeBin,
+        args: [indexPath],
         env: { ...MCP_ENV },
       };
 
