@@ -29,9 +29,14 @@ export interface WalletCredentials {
   privateKey: string;    // Hex-encoded private key (encrypted at rest)
 }
 
-/**
- * Vault data structure v2 (encrypted on disk)
- */
+export interface SpendingPolicy {
+  maxPerTx?: string;
+  maxPerDay?: string;
+  allowedChains?: string[];
+  allowedRecipients?: string[];
+  blockedRecipients?: string[];
+}
+
 export interface VaultData {
   version: number;
   name?: string;
@@ -39,6 +44,7 @@ export interface VaultData {
   updatedAt: string;
   wallet?: WalletCredentials;
   exchanges: Partial<Record<ExchangeId, ExchangeCredentials>>;
+  policy?: SpendingPolicy;
 }
 
 /**

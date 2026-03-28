@@ -13,6 +13,7 @@ export type {
   ExchangeId,
   ExchangeCredentials,
   WalletCredentials,
+  SpendingPolicy,
 } from './types.js';
 export {
   DEFAULT_VAULT_PATH,

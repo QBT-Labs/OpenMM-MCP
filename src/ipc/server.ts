@@ -1,13 +1,14 @@
 import { createServer, Socket } from 'net';
 import { existsSync, unlinkSync, chmodSync } from 'fs';
 import type { Vault } from '../vault/vault.js';
-import type { ExchangeCredentials, WalletCredentials } from '../vault/types.js';
+import type { ExchangeCredentials, WalletCredentials, SpendingPolicy } from '../vault/types.js';
 import type { IPCRequest, IPCResponse, SignPaymentPayload } from './types.js';
 
 export class UnifiedIPCServer {
   private server: ReturnType<typeof createServer> | null = null;
   private exchanges: Map<string, ExchangeCredentials> = new Map();
   private wallet: WalletCredentials | null = null;
+  private policy: SpendingPolicy | null = null;
 
   loadFromVault(vault: Vault): { exchanges: string[]; walletAddress?: string } {
     const exchangeIds = vault.listExchanges();
@@ -18,6 +19,9 @@ export class UnifiedIPCServer {
 
     const wallet = vault.getWallet();
     if (wallet) this.wallet = wallet;
+
+    const policy = vault.getPolicy();
+    if (policy) this.policy = policy;
 
     return {
       exchanges: exchangeIds,
@@ -56,6 +60,7 @@ export class UnifiedIPCServer {
     }
     this.exchanges.clear();
     this.wallet = null;
+    this.policy = null;
   }
 
   private handleConnection(socket: Socket): void {
@@ -147,6 +152,13 @@ export class UnifiedIPCServer {
    * of scope immediately. It is NEVER copied into a separate long-lived variable.
    */
   private async signAndWipe(id: string, payload: SignPaymentPayload): Promise<IPCResponse> {
+    if (this.policy) {
+      const rejection = this.checkPolicy(payload);
+      if (rejection) {
+        return { id, success: false, error: `POLICY_REJECTED: ${rejection}` };
+      }
+    }
+
     try {
       const { signEIP3009 } = await import('@qbtlabs/x402/chains/evm');
 
@@ -168,6 +180,35 @@ export class UnifiedIPCServer {
     } catch (err) {
       return { id, success: false, error: `Signing failed: ${(err as Error).message}` };
     }
+  }
+
+  private checkPolicy(payload: SignPaymentPayload): string | null {
+    const p = this.policy!;
+
+    if (p.maxPerTx) {
+      const maxWei = BigInt(Math.floor(parseFloat(p.maxPerTx) * 1e6));
+      if (BigInt(payload.amount) > maxWei) {
+        return `amount ${payload.amount} exceeds max-per-tx ${p.maxPerTx} USDC`;
+      }
+    }
+
+    if (p.allowedChains && p.allowedChains.length > 0) {
+      if (!p.allowedChains.includes(String(payload.chainId))) {
+        return `chain ${payload.chainId} not in allowed chains`;
+      }
+    }
+
+    if (p.blockedRecipients?.includes(payload.to.toLowerCase())) {
+      return `recipient ${payload.to} is blocked`;
+    }
+
+    if (p.allowedRecipients && p.allowedRecipients.length > 0) {
+      if (!p.allowedRecipients.includes(payload.to.toLowerCase())) {
+        return `recipient ${payload.to} not in allowed recipients`;
+      }
+    }
+
+    return null;
   }
 
   private send(socket: Socket, response: IPCResponse): void {

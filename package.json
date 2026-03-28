@@ -8,7 +8,12 @@
     "openmm-mcp": "dist/index.js",
     "qbtlabs-openmm-mcp": "dist/index.js",
     "openmm-vault": "dist/vault/cli.js",
-    "openmm": "dist/scripts/serve-cli.js"
+    "openmm": "dist/scripts/serve-cli.js",
+    "openmm-init": "dist/scripts/init-cli.js",
+    "openmm-exchange": "dist/scripts/exchange-cli.js",
+    "openmm-wallet": "dist/scripts/wallet-cli.js",
+    "openmm-policy": "dist/scripts/policy-cli.js",
+    "openmm-status": "dist/scripts/status-cli.js"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",

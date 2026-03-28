@@ -16,6 +16,7 @@ import type {
   ExchangeId,
   ExchangeCredentials,
   WalletCredentials,
+  SpendingPolicy,
 } from './types.js';
 import {
   DEFAULT_VAULT_PATH,
@@ -214,6 +215,25 @@ export class Vault {
     return true;
   }
 
+  getPolicy(): SpendingPolicy | undefined {
+    this.ensureUnlocked();
+    return this.data!.policy;
+  }
+
+  async setPolicy(policy: SpendingPolicy): Promise<void> {
+    this.ensureUnlocked();
+    this.data!.policy = policy;
+    this.data!.updatedAt = new Date().toISOString();
+    await this.save();
+  }
+
+  async resetPolicy(): Promise<void> {
+    this.ensureUnlocked();
+    delete this.data!.policy;
+    this.data!.updatedAt = new Date().toISOString();
+    await this.save();
+  }
+
   /**
    * List configured exchanges
    */
@@ -233,7 +253,7 @@ export class Vault {
   /**
    * Get vault info (without sensitive data)
    */
-  getInfo(): { version: number; name?: string; createdAt: string; updatedAt: string; exchanges: ExchangeId[]; hasWallet: boolean; walletAddress?: string } {
+  getInfo(): { version: number; name?: string; createdAt: string; updatedAt: string; exchanges: ExchangeId[]; hasWallet: boolean; walletAddress?: string; walletChain?: string; hasPolicy: boolean; policy?: SpendingPolicy } {
     this.ensureUnlocked();
     return {
       version: this.data!.version,
@@ -243,6 +263,9 @@ export class Vault {
       exchanges: this.listExchanges(),
       hasWallet: !!this.data!.wallet,
       walletAddress: this.data!.wallet?.address,
+      walletChain: this.data!.wallet?.chain,
+      hasPolicy: !!this.data!.policy,
+      policy: this.data!.policy,
     };
   }
 
