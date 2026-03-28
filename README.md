@@ -67,8 +67,8 @@ If you prefer to edit config files directly instead of using `--setup`:
 {
   "mcpServers": {
     "openmm": {
-      "command": "npx",
-      "args": ["@qbtlabs/openmm-mcp"],
+      "command": "node",
+      "args": ["/path/to/openmm-mcp/dist/index.js"],
       "env": {
         "MCP_TRANSPORT": "stdio",
         "OPENMM_SOCKET": "/tmp/openmm.sock",
@@ -79,6 +79,10 @@ If you prefer to edit config files directly instead of using `--setup`:
   }
 }
 ```
+
+Replace `/path/to/openmm-mcp` with the actual install path. For Claude Desktop, use the full path to `node` (e.g. from `which node`) to avoid nvm/PATH issues.
+
+> **Tip:** Run `openmm-mcp --setup` instead — it writes the correct absolute paths automatically.
 
 No API keys. No private keys. No passwords. Just the socket path.
 
