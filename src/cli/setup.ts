@@ -148,11 +148,13 @@ async function main(): Promise<void> {
       const servers = config.mcpServers as Record<string, unknown>;
 
       const nodeBin = process.execPath;
-      const indexPath = path.resolve(__dirname, '..', 'index.js');
+      const distDir = path.resolve(__dirname, '..');
+      const indexPath = path.join(distDir, 'index.js');
 
       servers['openmm'] = {
         command: nodeBin,
         args: [indexPath],
+        cwd: distDir,
         env: { ...MCP_ENV },
       };
 
