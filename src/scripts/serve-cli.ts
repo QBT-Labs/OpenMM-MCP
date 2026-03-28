@@ -76,7 +76,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Interactive password prompt — never from flags or env vars
   const password = await questionHidden('Vault password: ');
   if (!password) {
     console.error('❌ Password required');
@@ -92,7 +91,6 @@ async function main(): Promise<void> {
 
   console.log('✅ Vault decrypted');
 
-  // Load into IPC server, then lock vault (data lives in server memory)
   const server = new UnifiedIPCServer();
   const info = server.loadFromVault(vault);
   vault.lock();
@@ -119,7 +117,6 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // Keep process alive
   setInterval(() => {}, 60_000);
 }
 

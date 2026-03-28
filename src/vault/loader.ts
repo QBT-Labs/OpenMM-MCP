@@ -7,16 +7,12 @@
  * Wallet credentials are NOT loaded into env vars — the MCP process signs
  * payments by calling UnifiedIPCClient.signPayment(), so the private key
  * never enters this process.
- *
- * Priority:
- * 1. Unified IPC socket (OPENMM_SOCKET) — most secure, recommended
- * 2. Direct vault unlock (password from env) — fallback for development
  */
 
-import { Vault } from './vault.js';
+import { existsSync } from 'fs';
 import type { ExchangeId } from './types.js';
+import { DEFAULT_SOCKET_PATH } from '../ipc/types.js';
 
-// Map of exchange IDs to env var names
 const ENV_VAR_MAP: Record<ExchangeId, { key: string; secret: string; passphrase?: string }> = {
   mexc: { key: 'MEXC_API_KEY', secret: 'MEXC_SECRET' },
   gateio: { key: 'GATEIO_API_KEY', secret: 'GATEIO_SECRET' },
@@ -27,9 +23,6 @@ const ENV_VAR_MAP: Record<ExchangeId, { key: string; secret: string; passphrase?
   okx: { key: 'OKX_API_KEY', secret: 'OKX_SECRET', passphrase: 'OKX_PASSPHRASE' },
 };
 
-/**
- * Set exchange env vars from credentials
- */
 function setExchangeEnvVars(exchangeId: string, creds: { apiKey: string; secret: string; passphrase?: string }): boolean {
   const envVars = ENV_VAR_MAP[exchangeId as ExchangeId];
   if (!envVars) return false;
@@ -44,9 +37,6 @@ function setExchangeEnvVars(exchangeId: string, creds: { apiKey: string; secret:
   return true;
 }
 
-/**
- * Load credentials from the unified IPC socket (most secure)
- */
 async function loadFromSocket(): Promise<string[]> {
   const { UnifiedIPCClient } = await import('../ipc/client.js');
   const client = new UnifiedIPCClient();
@@ -82,58 +72,10 @@ async function loadFromSocket(): Promise<string[]> {
   }
 }
 
-/**
- * Load credentials directly from vault (fallback, requires password in env)
- * Note: wallet credentials are NOT loaded into env vars in this path either.
- */
-async function loadFromVaultDirect(password: string): Promise<string[]> {
-  const vault = new Vault();
-
-  if (!vault.exists()) {
-    return [];
-  }
-
-  try {
-    await vault.unlock(password);
-  } catch (error) {
-    console.error('❌ Failed to unlock vault:', (error as Error).message);
-    return [];
-  }
-
-  const loaded: string[] = [];
-
-  const exchanges = vault.listExchanges();
-  for (const exchangeId of exchanges) {
-    const creds = vault.getExchange(exchangeId);
-    if (!creds) continue;
-    if (setExchangeEnvVars(exchangeId, creds)) {
-      loaded.push(exchangeId);
-    }
-  }
-
-  vault.lock();
-
+export async function loadVaultCredentials(): Promise<string[]> {
+  const loaded = await loadFromSocket();
   if (loaded.length > 0) {
-    console.error(`🔐 Loaded from vault: ${loaded.join(', ')}`);
-  }
-
-  return loaded;
-}
-
-/**
- * Load credentials (tries IPC socket first, then vault direct)
- */
-export async function loadVaultCredentials(password?: string): Promise<string[]> {
-  // Try unified socket first (most secure)
-  const fromSocket = await loadFromSocket();
-  if (fromSocket.length > 0) {
-    return fromSocket;
-  }
-
-  // Fallback to direct vault (less secure, needs password in env)
-  const vaultPassword = password || process.env.OPENMM_VAULT_PASSWORD;
-  if (vaultPassword) {
-    return loadFromVaultDirect(vaultPassword);
+    return loaded;
   }
 
   console.error('⚠️  No credentials loaded');
@@ -142,10 +84,7 @@ export async function loadVaultCredentials(password?: string): Promise<string[]>
   return [];
 }
 
-/**
- * Check if vault or socket is available
- */
 export function isVaultAvailable(): boolean {
-  const vault = new Vault();
-  return vault.exists();
+  const socketPath = process.env.OPENMM_SOCKET || DEFAULT_SOCKET_PATH;
+  return existsSync(socketPath);
 }

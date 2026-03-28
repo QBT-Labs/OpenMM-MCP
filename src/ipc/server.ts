@@ -1,15 +1,3 @@
-/**
- * Unified IPC Server
- *
- * Single Unix socket that handles exchange credentials and payment signing.
- * Started by `openmm serve` after interactive vault unlock.
- *
- * Security:
- * - Socket mode 0600 (owner-only)
- * - Private key never leaves this process
- * - signAndWipe pattern: key used inline, goes out of scope immediately
- */
-
 import { createServer, Socket } from 'net';
 import { existsSync, unlinkSync, chmodSync } from 'fs';
 import type { Vault } from '../vault/vault.js';
@@ -21,9 +9,6 @@ export class UnifiedIPCServer {
   private exchanges: Map<string, ExchangeCredentials> = new Map();
   private wallet: WalletCredentials | null = null;
 
-  /**
-   * Load credentials and wallet from an unlocked vault
-   */
   loadFromVault(vault: Vault): { exchanges: string[]; walletAddress?: string } {
     const exchangeIds = vault.listExchanges();
     for (const id of exchangeIds) {
@@ -40,11 +25,7 @@ export class UnifiedIPCServer {
     };
   }
 
-  /**
-   * Start listening on the Unix socket
-   */
   async start(socketPath: string): Promise<void> {
-    // Remove stale socket
     if (existsSync(socketPath)) {
       unlinkSync(socketPath);
     }
@@ -65,9 +46,6 @@ export class UnifiedIPCServer {
     });
   }
 
-  /**
-   * Stop and clean up
-   */
   stop(socketPath: string): void {
     if (this.server) {
       this.server.close();
@@ -95,9 +73,7 @@ export class UnifiedIPCServer {
       }
     });
 
-    socket.on('error', () => {
-      // Client disconnected — nothing to do
-    });
+    socket.on('error', () => {});
   }
 
   private async handleMessage(socket: Socket, message: string): Promise<void> {
@@ -167,8 +143,8 @@ export class UnifiedIPCServer {
   }
 
   /**
-   * Sign an EIP-3009 payment. Private key is read from vault data, used once,
-   * and goes out of scope immediately. It is NEVER held in a long-lived variable.
+   * Private key is read from vault data, used once for signing, and goes out
+   * of scope immediately. It is NEVER copied into a separate long-lived variable.
    */
   private async signAndWipe(id: string, payload: SignPaymentPayload): Promise<IPCResponse> {
     try {

@@ -1,10 +1,3 @@
-/**
- * Unified IPC Client
- *
- * Connects to /tmp/openmm.sock for credential lookup and payment signing.
- * Used by the MCP server process — private keys never enter this process.
- */
-
 import { createConnection, Socket } from 'net';
 import { existsSync } from 'fs';
 import type { IPCRequest, IPCResponse, SignPaymentPayload } from './types.js';
@@ -51,9 +44,7 @@ export class UnifiedIPCClient {
               this.pendingRequests.delete(response.id);
               pending.resolve(response);
             }
-          } catch {
-            // Ignore parse errors
-          }
+          } catch {}
         }
       });
 
