@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 
-// Export createServer for testing and programmatic use
+// OpenMM SDK creates ./logs/ on import. Change cwd to a writable location
+// so it works when launched from / (Claude Desktop's default).
+import { mkdirSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
+const openmmHome = join(homedir(), '.openmm');
+mkdirSync(openmmHome, { recursive: true });
+process.chdir(openmmHome);
+
 export { createServer } from './server.js';
 
-// Handle setup command before importing heavy dependencies
 if (process.argv[2] === 'setup' || process.argv[2] === '--setup') {
   import('./cli/setup.js');
 } else {
-  // Normal server startup
   import('./server.js');
 }
