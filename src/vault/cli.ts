@@ -139,12 +139,12 @@ async function cmdInit(vault: Vault): Promise<void> {
     console.log('\n📝 Enter wallet credentials:\n');
 
     const privateKey = await prompt('Private key (hex, 0x...): ', true);
-    if (!privateKey) {
+    if (!privateKey.trim()) {
       console.error('❌ Private key is required — skipping wallet');
     } else {
       const address = await prompt('EVM address (0x...): ');
-      if (!address.startsWith('0x')) {
-        console.error('❌ Address must start with 0x — skipping wallet');
+      if (!address.trim() || !address.startsWith('0x')) {
+        console.error('❌ Valid 0x address is required — skipping wallet');
       } else {
         const chain = await prompt('Chain [base]: ') || 'base';
         const wallet: WalletCredentials = { address, chain, privateKey };
@@ -214,7 +214,18 @@ async function cmdAdd(vault: Vault, exchangeId: string): Promise<void> {
   
   const apiKey = await prompt('API Key: ');
   const secret = await prompt('Secret: ', true);
-  
+
+  if (!apiKey.trim()) {
+    console.error('❌ API Key is required');
+    vault.lock();
+    process.exit(1);
+  }
+  if (!secret.trim()) {
+    console.error('❌ Secret is required');
+    vault.lock();
+    process.exit(1);
+  }
+
   const credentials: ExchangeCredentials = { apiKey, secret };
 
   // Some exchanges need passphrase
