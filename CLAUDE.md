@@ -58,8 +58,8 @@ Wraps the `@3rd-eye-labs/openmm` SDK's `ExchangeFactory`. Supported exchanges: M
 
 ### Credential Management
 
-- **Vault** (`src/vault/`) — AES-256-GCM encrypted storage at `~/.openmm/vault.json`. CLI via `openmm-vault`.
-- **Credentials Server** (`src/credentials/`) — Isolated process serving credentials via Unix socket (`/tmp/x402-signer.sock`). CLI via `openmm-creds`.
+- **Vault** (`src/vault/`) — AES-256-GCM encrypted storage at `~/.openmm/vault.enc`. CLI via `openmm-vault`.
+- **Unified IPC** (`src/ipc/`) — Single Unix socket at `/tmp/openmm.sock` serving credentials and payment signing. Started by `openmm serve`.
 - Auto-loaded at startup via `src/vault/loader.ts`, setting env vars for exchange adapters.
 
 ### Resources & Prompts
