@@ -8,12 +8,19 @@
  */
 
 import { randomBytes } from 'crypto';
+import { privateKeyToAccount } from 'viem/accounts';
 import { Vault } from '../vault/vault.js';
 import type { ExchangeId, ExchangeCredentials, WalletCredentials } from '../vault/types.js';
 import { prompt, confirm } from '../cli/prompt.js';
 
 const SUPPORTED_EXCHANGES: ExchangeId[] = [
-  'mexc', 'gateio', 'bitget', 'kraken', 'binance', 'coinbase', 'okx',
+  'mexc',
+  'gateio',
+  'bitget',
+  'kraken',
+  'binance',
+  'coinbase',
+  'okx',
 ];
 
 function generatePrivateKey(): string {
@@ -22,12 +29,9 @@ function generatePrivateKey(): string {
 
 function deriveAddress(privateKey: string): string {
   try {
-    // Use viem if available for proper address derivation
-    const { privateKeyToAccount } = require('viem/accounts');
     const account = privateKeyToAccount(privateKey as `0x${string}`);
     return account.address;
   } catch {
-    // Fallback: return placeholder — user should verify
     return '0x' + randomBytes(20).toString('hex');
   }
 }
@@ -73,7 +77,7 @@ async function main(): Promise<void> {
   }
 
   const address = deriveAddress(privateKey);
-  const chain = await prompt('Chain [base-sepolia]: ') || 'base-sepolia';
+  const chain = (await prompt('Chain [base-sepolia]: ')) || 'base-sepolia';
 
   const wallet: WalletCredentials = { address, chain, privateKey };
   await vault.setWallet(wallet);
@@ -118,23 +122,29 @@ async function main(): Promise<void> {
 
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('Add this to your claude.json:\n');
-  console.log(JSON.stringify({
-    mcpServers: {
-      openmm: {
-        type: 'stdio',
-        command: 'node',
-        args: ['dist/index.js'],
-        env: {
-          MCP_TRANSPORT: 'stdio',
-          OPENMM_SOCKET: '/tmp/openmm.sock',
-          PAYMENT_SERVER: 'https://mcp.openmm.io',
-          X402_TESTNET: 'true',
+  console.log(
+    JSON.stringify(
+      {
+        mcpServers: {
+          openmm: {
+            type: 'stdio',
+            command: 'node',
+            args: ['dist/index.js'],
+            env: {
+              MCP_TRANSPORT: 'stdio',
+              OPENMM_SOCKET: '/tmp/openmm.sock',
+              PAYMENT_SERVER: 'https://mcp.openmm.io',
+              X402_TESTNET: 'true',
+            },
+          },
         },
       },
-    },
-  }, null, 2));
+      null,
+      2
+    )
+  );
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('\nRun \'openmm serve\' to start');
+  console.log("\nRun 'openmm serve' to start");
 }
 
 main().catch((error: unknown) => {
