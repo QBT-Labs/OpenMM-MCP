@@ -1,7 +1,8 @@
 {
   "name": "@qbtlabs/openmm-mcp",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "MCP server for OpenMM — exposes market data, account, trading, and strategy tools to AI agents",
+  "mcpName": "io.github.QBT-Labs/openmm-mcp",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {

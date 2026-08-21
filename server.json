@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.QBT-Labs/openmm-mcp",
+  "description": "MCP server for OpenMM — exposes market data, account, trading, and strategy tools to AI agents",
+  "repository": {
+    "url": "https://github.com/QBT-Labs/openmm-mcp",
+    "source": "github"
+  },
+  "version": "1.0.13",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@qbtlabs/openmm-mcp",
+      "version": "1.0.13",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.openmm.io/mcp"
+    }
+  ]
+}
