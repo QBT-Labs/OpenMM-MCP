@@ -15,3 +15,14 @@ X402_EVM_ADDRESS = "0x5c19cdCF51af3C38Ef23d7497AB88564C5b9e29E"
 [alias]
 winston = "./src/shims/winston.ts"
 dotenv = "./src/shims/dotenv.ts"
+
+# Per-tool usage analytics. Cloudflare's built-in metrics count HTTP
+# invocations; this records the JSON-RPC method, tool, client and latency so
+# usage can be broken down by tool. See src/analytics.ts for the column layout.
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "openmm_mcp"
+
+# Workers Logs, for debugging individual calls alongside the aggregate counts.
+[observability]
+enabled = true

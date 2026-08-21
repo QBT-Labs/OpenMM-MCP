@@ -1,8 +1,28 @@
 // All heavy imports are deferred to inside the fetch handler to avoid
 // global-scope I/O, which Cloudflare Workers disallow.
+import {
+  parseMcpRequest,
+  recordMcpCall,
+  type AnalyticsEngineDataset,
+} from './analytics.js';
+import { handleStats } from './stats.js';
 
 interface Env {
   [key: string]: string | undefined;
+}
+
+/**
+ * Non-string bindings live outside Env, whose string index signature every
+ * other consumer relies on. Workers hands both to fetch() in one object.
+ */
+interface Bindings {
+  /** Workers Analytics Engine; absent locally and in tests. */
+  ANALYTICS?: AnalyticsEngineDataset;
+}
+
+/** Subset of Cloudflare's ExecutionContext that this worker uses. */
+interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 interface JWTPayload {
@@ -47,8 +67,13 @@ async function generateJWT(payload: JWTPayload, env: Env): Promise<string> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env & Bindings, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === '/stats' && request.method === 'GET') {
+      const stats = await handleStats(request, env);
+      if (stats) return stats;
+    }
 
     if (url.pathname === '/health' && request.method === 'GET') {
       return new Response(JSON.stringify({ status: 'ok' }), {
@@ -231,7 +256,29 @@ export default {
         handler: (req: Request) => transport.handleRequest(req),
       });
 
-      return paymentGatedHandler(request);
+      // Read the JSON-RPC body from a clone so the original request — headers,
+      // body and all — reaches the payment middleware untouched.
+      let info = { method: 'unknown', tool: '', client: 'unknown' };
+      try {
+        info = parseMcpRequest(await request.clone().text());
+      } catch {
+        // Unreadable body: still serve the request, just without attribution.
+      }
+
+      const startedAt = Date.now();
+      const response = await paymentGatedHandler(request);
+
+      const write = () =>
+        recordMcpCall(env.ANALYTICS, {
+          ...info,
+          status: response.ok ? 'ok' : 'error',
+          httpStatus: response.status,
+          latencyMs: Date.now() - startedAt,
+        });
+      if (ctx) ctx.waitUntil(Promise.resolve().then(write));
+      else write();
+
+      return response;
     }
 
     return new Response('Not found', { status: 404 });
