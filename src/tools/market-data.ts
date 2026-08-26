@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ExchangeParam, SymbolParam, LimitParam, validateSymbol } from '../utils/index.js';
-import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
+import { validateExchange, getPublicConnector } from '../exchange/exchange-manager.js';
 
 const TimeframeParam = z
   .enum(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'])
@@ -19,7 +19,7 @@ export function registerMarketDataTools(server: McpServer): void {
     async ({ exchange, symbol }) => {
       const validExchange = validateExchange(exchange);
       const validSymbol = validateSymbol(symbol);
-      const connector = await getConnectorSafe(exchange);
+      const connector = await getPublicConnector(exchange);
       const ticker = await connector.getTicker(validSymbol);
 
       return {
@@ -59,7 +59,7 @@ export function registerMarketDataTools(server: McpServer): void {
     async ({ exchange, symbol, limit }) => {
       const validExchange = validateExchange(exchange);
       const validSymbol = validateSymbol(symbol);
-      const connector = await getConnectorSafe(exchange);
+      const connector = await getPublicConnector(exchange);
       const orderbook = await connector.getOrderBook(validSymbol);
 
       const bids = orderbook.bids.slice(0, limit);
@@ -109,7 +109,7 @@ export function registerMarketDataTools(server: McpServer): void {
     async ({ exchange, symbol, limit }) => {
       const validExchange = validateExchange(exchange);
       const validSymbol = validateSymbol(symbol);
-      const connector = await getConnectorSafe(exchange);
+      const connector = await getPublicConnector(exchange);
       const trades = await connector.getRecentTrades(validSymbol);
       const limitedTrades = trades.slice(0, limit);
 
@@ -154,38 +154,33 @@ export function registerMarketDataTools(server: McpServer): void {
     async ({ exchange, symbol, timeframe, limit }) => {
       const validExchange = validateExchange(exchange);
       const validSymbol = validateSymbol(symbol);
-      const connector = await getConnectorSafe(exchange);
+      const connector = await getPublicConnector(exchange);
 
-      type OHLCVConnector = {
-        getOHLCV?: (
-          symbol: string,
-          timeframe: string,
-          limit: number
-        ) => Promise<
-          Array<{
-            timestamp: number;
-            open: number;
-            high: number;
-            low: number;
-            close: number;
-            volume: number;
-          }>
-        >;
-      };
-      const connectorWithOHLCV = connector as unknown as OHLCVConnector;
+      // getOHLCV is part of BaseExchangeConnector and implemented by every
+      // supported exchange, so no capability check is needed.
+      const ohlcv = await connector.getOHLCV(validSymbol, timeframe, limit);
 
-      if (!connectorWithOHLCV.getOHLCV) {
+      if (ohlcv.length === 0) {
         return {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify({ error: `OHLCV not supported on ${validExchange}` }, null, 2),
+              text: JSON.stringify(
+                {
+                  symbol: validSymbol,
+                  timeframe,
+                  candles: [],
+                  summary: { count: 0 },
+                  exchange: validExchange,
+                },
+                null,
+                2
+              ),
             },
           ],
         };
       }
 
-      const ohlcv = await connectorWithOHLCV.getOHLCV(validSymbol, timeframe, limit);
       const high = Math.max(...ohlcv.map((c) => c.high));
       const low = Math.min(...ohlcv.map((c) => c.low));
       const volumes = ohlcv.map((c) => c.volume);

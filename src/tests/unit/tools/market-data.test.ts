@@ -65,10 +65,16 @@ describe('Market Data MCP Tools', () => {
     { id: '3', symbol: 'BTC/USDT', side: 'buy', price: 65005, amount: 0.8, timestamp: Date.now() },
   ];
 
+  const mockOHLCV = [
+    { timestamp: 1700000000000, open: 64000, high: 64500, low: 63800, close: 64200, volume: 100 },
+    { timestamp: 1700003600000, open: 64200, high: 65200, low: 64100, close: 65000, volume: 150 },
+  ];
+
   const mockConnector = {
     getTicker: jest.fn().mockResolvedValue(mockTicker),
     getOrderBook: jest.fn().mockResolvedValue(mockOrderBook),
     getRecentTrades: jest.fn().mockResolvedValue(mockTrades),
+    getOHLCV: jest.fn().mockResolvedValue(mockOHLCV),
   };
 
   beforeAll(async () => {
@@ -186,6 +192,67 @@ describe('Market Data MCP Tools', () => {
       const data = parseResult(result);
       expect(data.trades).toHaveLength(2);
       expect(data.summary.totalTrades).toBe(2);
+    });
+  });
+
+  describe('get_ohlcv', () => {
+    it('should return candles with summary', async () => {
+      const result = await client.callTool({
+        name: 'get_ohlcv',
+        arguments: { exchange: 'mexc', symbol: 'BTC/USDT', timeframe: '1h' },
+      });
+
+      const data = parseResult(result);
+      expect(data.symbol).toBe('BTC/USDT');
+      expect(data.timeframe).toBe('1h');
+      expect(data.candles).toHaveLength(2);
+      expect(data.summary.count).toBe(2);
+      expect(data.summary.periodHigh).toBe(65200);
+      expect(data.summary.periodLow).toBe(63800);
+      expect(data.summary.avgVolume).toBe(125);
+      expect(data.summary.latestClose).toBe(65000);
+      expect(data.summary.priceChange).toBe(1000);
+      expect(data.exchange).toBe('mexc');
+    });
+
+    it('should pass timeframe and limit through to the connector', async () => {
+      await client.callTool({
+        name: 'get_ohlcv',
+        arguments: { exchange: 'mexc', symbol: 'BTC/USDT', timeframe: '4h', limit: 50 },
+      });
+
+      expect(mockConnector.getOHLCV).toHaveBeenCalledWith('BTC/USDT', '4h', 50);
+    });
+
+    it('should handle an empty candle set without producing Infinity or NaN', async () => {
+      mockConnector.getOHLCV.mockResolvedValueOnce([]);
+
+      const result = await client.callTool({
+        name: 'get_ohlcv',
+        arguments: { exchange: 'mexc', symbol: 'BTC/USDT' },
+      });
+
+      const data = parseResult(result);
+      expect(data.candles).toEqual([]);
+      expect(data.summary.count).toBe(0);
+      expect(JSON.stringify(data)).not.toMatch(/Infinity|NaN|null/);
+    });
+  });
+
+  // QBT-688: public market data must not require API credentials.
+  describe('public market data does not require authentication', () => {
+    it.each([
+      ['get_ticker', { exchange: 'mexc', symbol: 'BTC/USDT' }],
+      ['get_orderbook', { exchange: 'mexc', symbol: 'BTC/USDT' }],
+      ['get_trades', { exchange: 'mexc', symbol: 'BTC/USDT' }],
+      ['get_ohlcv', { exchange: 'mexc', symbol: 'BTC/USDT' }],
+    ])('%s should request a connector with requireAuth: false', async (name, args) => {
+      await client.callTool({ name, arguments: args });
+
+      expect(mockExchangeFactory.getExchange).toHaveBeenCalledWith(
+        'mexc',
+        expect.objectContaining({ requireAuth: false })
+      );
     });
   });
 });
