@@ -7,6 +7,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolPricing } from '@qbtlabs/x402';
 
 export interface JWTClaims {
   user_id: string;
@@ -18,7 +19,7 @@ export interface JWTClaims {
 }
 
 // Tool pricing in USD - format expected by x402 setToolPrices
-export const TOOL_PRICING: Record<string, { tier: string; price: number }> = {
+export const TOOL_PRICING: Record<string, ToolPricing> = {
   list_exchanges: { tier: 'free', price: 0 },
   get_ticker: { tier: 'read', price: 0.001 },
   get_orderbook: { tier: 'read', price: 0.001 },
@@ -88,7 +89,10 @@ export async function wrapServerWithPayment(server: McpServer): Promise<void> {
 
     const { wrapWithSplitPayment } = await import('@qbtlabs/x402/split');
 
-    wrapWithSplitPayment(server as any, {
+    // x402 bundles its own nested copy of @modelcontextprotocol/sdk, so its
+    // McpServer is nominally distinct from ours despite being structurally the
+    // same class. Cast to the parameter's own type rather than to `any`.
+    wrapWithSplitPayment(server as unknown as Parameters<typeof wrapWithSplitPayment>[0], {
       signer: {
         address: status.wallet,
         sign: async (payload: { to: string; amount: string; chainId: number }) => {

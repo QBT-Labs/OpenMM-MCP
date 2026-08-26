@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ExchangeParam, SymbolParam, validateSymbol } from '../utils/index.js';
+import type { Order } from '@3rd-eye-labs/openmm';
 import { validateExchange, getConnectorSafe } from '../exchange/exchange-manager.js';
 
 interface GridLevel {
@@ -113,7 +114,7 @@ export function registerStrategyTools(server: McpServer): void {
         sizeModel
       );
 
-      const placedOrders: any[] = [];
+      const placedOrders: Order[] = [];
       if (!dryRun) {
         for (const level of grid) {
           const order = await connector.createOrder(
@@ -227,13 +228,20 @@ export function registerStrategyTools(server: McpServer): void {
         connector.getOpenOrders(validSymbol),
       ]);
 
-      const buyOrders = openOrders.filter((o: any) => o.side === 'buy');
-      const sellOrders = openOrders.filter((o: any) => o.side === 'sell');
+      const buyOrders = openOrders.filter((o) => o.side === 'buy');
+      const sellOrders = openOrders.filter((o) => o.side === 'sell');
+
+      // Market orders carry no price, so drop those before comparing: a single
+      // undefined would otherwise turn the whole spread into NaN.
+      const priced = (orders: Order[]): number[] =>
+        orders.map((o) => o.price).filter((p): p is number => typeof p === 'number');
+
+      const buyPrices = priced(buyOrders);
+      const sellPrices = priced(sellOrders);
 
       const spread =
-        sellOrders.length > 0 && buyOrders.length > 0
-          ? Math.min(...sellOrders.map((o: any) => o.price)) -
-            Math.max(...buyOrders.map((o: any) => o.price))
+        sellPrices.length > 0 && buyPrices.length > 0
+          ? Math.min(...sellPrices) - Math.max(...buyPrices)
           : null;
 
       return {
@@ -249,7 +257,7 @@ export function registerStrategyTools(server: McpServer): void {
                   sellOrders: sellOrders.length,
                 },
                 gridSpread: spread,
-                orders: openOrders.map((o: any) => ({
+                orders: openOrders.map((o) => ({
                   id: o.id,
                   side: o.side,
                   price: o.price,

@@ -1,7 +1,14 @@
-import type { BaseExchangeConnector } from '@3rd-eye-labs/openmm';
+import type {
+  BaseExchangeConnector,
+  SupportedExchange as SdkSupportedExchange,
+} from '@3rd-eye-labs/openmm';
 
 const SUPPORTED_EXCHANGES = ['mexc', 'gateio', 'bitget', 'kraken'] as const;
 export type SupportedExchange = (typeof SUPPORTED_EXCHANGES)[number];
+
+// Fails to compile if the SDK's supported set ever diverges from ours.
+const _exchangesMatchSdk: SdkSupportedExchange = null as unknown as SupportedExchange;
+void _exchangesMatchSdk;
 
 export function validateExchange(exchange: string): SupportedExchange {
   const lower = exchange.toLowerCase();
@@ -33,7 +40,7 @@ export async function getConnectorSafe(
   const { ExchangeFactory } = await import('@3rd-eye-labs/openmm');
 
   try {
-    return await ExchangeFactory.getExchange(validExchange as any, { requireAuth });
+    return await ExchangeFactory.getExchange(validExchange, { requireAuth });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const hint = requireAuth

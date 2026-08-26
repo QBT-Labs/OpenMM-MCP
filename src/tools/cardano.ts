@@ -76,7 +76,37 @@ async function fetchADAUSDT(): Promise<{ price: number; sources: string[] }> {
   };
 }
 
-async function fetchIrisPools(): Promise<any[]> {
+/** Asset as returned by the Iris API. Native tokens carry a policyId; ADA does not. */
+interface IrisAsset {
+  policyId?: string;
+  nameHex?: string;
+  decimals?: number;
+}
+
+interface IrisPoolState {
+  tvl?: number;
+  price?: number;
+  reserveA?: number | string;
+  reserveB?: number | string;
+}
+
+/**
+ * Liquidity pool as returned by the Iris API.
+ *
+ * Every field is optional: Iris varies its shape across DEXes, and the token
+ * pair arrives either nested under `pair` or flattened onto the pool itself.
+ */
+interface IrisPool {
+  identifier?: string;
+  dex?: string;
+  isActive?: boolean;
+  state?: IrisPoolState;
+  pair?: { tokenA?: IrisAsset; tokenB?: IrisAsset };
+  tokenA?: IrisAsset;
+  tokenB?: IrisAsset;
+}
+
+async function fetchIrisPools(): Promise<IrisPool[]> {
   const resp = await fetch(`${IRIS_BASE_URL}/api/liquidity-pools`, {
     headers: { 'User-Agent': 'OpenMM-MCP-Agent/1.0' },
     signal: AbortSignal.timeout(10000),
@@ -84,8 +114,9 @@ async function fetchIrisPools(): Promise<any[]> {
   if (!resp.ok) {
     throw new Error(`Iris API error: ${resp.status}`);
   }
-  const data = await resp.json();
-  return data?.data || data || [];
+  const data = (await resp.json()) as { data?: IrisPool[] } | IrisPool[] | null;
+  if (Array.isArray(data)) return data;
+  return data?.data ?? [];
 }
 
 async function fetchIrisPrices(identifiers: string[]): Promise<number[]> {
@@ -105,7 +136,7 @@ async function fetchIrisPrices(identifiers: string[]): Promise<number[]> {
     .filter((p: number) => p > 0);
 }
 
-function matchesToken(pool: any, policyId: string): boolean {
+function matchesToken(pool: IrisPool, policyId: string): boolean {
   const tokenA = pool.pair?.tokenA || pool.tokenA;
   const tokenB = pool.pair?.tokenB || pool.tokenB;
   return tokenA?.policyId === policyId || tokenB?.policyId === policyId;
@@ -130,35 +161,35 @@ export function registerCardanoTools(server: McpServer): void {
       const [adaPrice, allPools] = await Promise.all([fetchADAUSDT(), fetchIrisPools()]);
 
       const tokenPools = allPools
-        .filter((p: any) => matchesToken(p, token.policyId))
-        .filter((p: any) => (p.state?.tvl || 0) >= token.minLiquidity)
-        .sort((a: any, b: any) => (b.state?.tvl || 0) - (a.state?.tvl || 0))
+        .filter((p) => matchesToken(p, token.policyId))
+        .filter((p) => (p.state?.tvl || 0) >= token.minLiquidity)
+        .sort((a, b) => (b.state?.tvl || 0) - (a.state?.tvl || 0))
         .slice(0, 3);
 
       if (tokenPools.length === 0) {
         throw new Error(`No liquidity pools found for ${upper} above minimum TVL threshold`);
       }
 
-      const identifiers = tokenPools.map((p: any) => p.identifier).filter(Boolean);
+      const identifiers = tokenPools
+        .map((p) => p.identifier)
+        .filter((id): id is string => Boolean(id));
       let tokenAdaPrice: number;
 
       if (identifiers.length > 0) {
         const prices = await fetchIrisPrices(identifiers);
         if (prices.length > 0) {
-          const totalTvl = tokenPools.reduce((sum: number, p: any) => sum + (p.state?.tvl || 0), 0);
-          tokenAdaPrice = tokenPools.reduce((sum: number, p: any, i: number) => {
+          const totalTvl = tokenPools.reduce((sum, p) => sum + (p.state?.tvl || 0), 0);
+          tokenAdaPrice = tokenPools.reduce((sum, p, i) => {
             const weight = (p.state?.tvl || 0) / totalTvl;
             return sum + (prices[i] || 0) * weight;
           }, 0);
         } else {
           tokenAdaPrice =
-            tokenPools.reduce((sum: number, p: any) => sum + (p.state?.price || 0), 0) /
-            tokenPools.length;
+            tokenPools.reduce((sum, p) => sum + (p.state?.price || 0), 0) / tokenPools.length;
         }
       } else {
         tokenAdaPrice =
-          tokenPools.reduce((sum: number, p: any) => sum + (p.state?.price || 0), 0) /
-          tokenPools.length;
+          tokenPools.reduce((sum, p) => sum + (p.state?.price || 0), 0) / tokenPools.length;
       }
 
       const tokenUsdtPrice = tokenAdaPrice * adaPrice.price;
@@ -178,7 +209,7 @@ export function registerCardanoTools(server: McpServer): void {
                 poolsUsed: tokenPools.length,
                 sources: {
                   ada: adaPrice.sources,
-                  pools: tokenPools.map((p: any) => ({
+                  pools: tokenPools.map((p) => ({
                     dex: p.dex || 'unknown',
                     tvl: p.state?.tvl,
                   })),
@@ -211,8 +242,8 @@ export function registerCardanoTools(server: McpServer): void {
 
       const allPools = await fetchIrisPools();
       const tokenPools = allPools
-        .filter((p: any) => matchesToken(p, token.policyId))
-        .sort((a: any, b: any) => (b.state?.tvl || 0) - (a.state?.tvl || 0));
+        .filter((p) => matchesToken(p, token.policyId))
+        .sort((a, b) => (b.state?.tvl || 0) - (a.state?.tvl || 0));
 
       return {
         content: [
@@ -222,7 +253,7 @@ export function registerCardanoTools(server: McpServer): void {
               {
                 symbol: upper,
                 totalPools: tokenPools.length,
-                pools: tokenPools.map((p: any) => ({
+                pools: tokenPools.map((p) => ({
                   identifier: p.identifier,
                   dex: p.dex || 'unknown',
                   tvl: p.state?.tvl || 0,
