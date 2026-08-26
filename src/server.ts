@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { registerTools } from './tools/index.js';
+import type { Socket } from 'node:net';
 import { registerResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
 import {
@@ -89,7 +90,7 @@ async function startHttpServer(): Promise<void> {
       evm: { address: walletAddress || '' },
       testnet: process.env.X402_TESTNET === 'true',
     });
-    setToolPrices(TOOL_PRICING as any);
+    setToolPrices(TOOL_PRICING);
 
     // Create the payment-gated handler.
     // withX402Server intercepts tool calls, returns 402 for paid tools,
@@ -102,28 +103,38 @@ async function startHttpServer(): Promise<void> {
 
         const { PassThrough } = await import('node:stream');
         const { ServerResponse, IncomingMessage } = await import('node:http');
-        const fakeSocket = new PassThrough();
-        const fakeReq = new IncomingMessage(fakeSocket as any);
+        // IncomingMessage wants a real Socket; a PassThrough is enough for the
+        // fields the transport actually reads, so the shape is asserted here.
+        const fakeSocket = new PassThrough() as unknown as Socket;
+        const fakeReq = new IncomingMessage(fakeSocket);
         fakeReq.method = req.method;
         fakeReq.url = '/mcp';
         fakeReq.headers = Object.fromEntries(req.headers.entries());
         const fakeRes = new ServerResponse(fakeReq);
 
         const responseChunks: Buffer[] = [];
-        fakeRes.write = ((chunk: any) => {
-          responseChunks.push(Buffer.from(chunk));
+        const collect = (chunk: unknown): void => {
+          if (Buffer.isBuffer(chunk)) {
+            responseChunks.push(chunk);
+          } else if (typeof chunk === 'string') {
+            responseChunks.push(Buffer.from(chunk));
+          }
+        };
+
+        fakeRes.write = ((chunk: unknown) => {
+          collect(chunk);
           return true;
-        }) as any;
+        }) as typeof fakeRes.write;
         let resolveEnd: () => void;
         const endPromise = new Promise<void>((r) => {
           resolveEnd = r;
         });
         const originalEnd = fakeRes.end.bind(fakeRes);
-        fakeRes.end = ((...args: any[]) => {
-          if (args[0]) responseChunks.push(Buffer.from(args[0]));
+        fakeRes.end = ((...args: unknown[]) => {
+          collect(args[0]);
           resolveEnd();
           return originalEnd();
-        }) as any;
+        }) as typeof fakeRes.end;
 
         await transport.handleRequest(fakeReq, fakeRes, parsedBody);
         await endPromise;
