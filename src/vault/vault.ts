@@ -45,6 +45,8 @@ export class Vault {
   private iterations: number;
   private data: VaultData | null = null;
   private derivedKey: Buffer | null = null;
+  /** Salt from the most recent key derivation; reused when re-encrypting on save. */
+  private salt: Buffer | null = null;
 
   constructor(config?: VaultConfig) {
     this.path = expandPath(config?.path || DEFAULT_VAULT_PATH);
@@ -128,6 +130,7 @@ export class Vault {
       wipeBuffer(this.derivedKey);
       this.derivedKey = null;
     }
+    this.salt = null;
     this.data = null;
   }
 
@@ -304,7 +307,7 @@ export class Vault {
     this.derivedKey = pbkdf2Sync(password, salt, this.iterations, 32, 'sha256');
 
     // Store salt for later (needed for decryption)
-    (this as any)._salt = salt;
+    this.salt = salt;
   }
 
   /**
@@ -318,8 +321,8 @@ export class Vault {
 
     // Get or generate salt
     let salt: Buffer;
-    if ((this as any)._salt) {
-      salt = (this as any)._salt;
+    if (this.salt) {
+      salt = this.salt;
     } else {
       // Re-read existing salt from file
       const existing = JSON.parse(readFileSync(this.path, 'utf8')) as EncryptedVault;
