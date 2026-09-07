@@ -197,7 +197,7 @@ mcp.openmm.io → x402 verification → Base L2 settlement
 | `cancel_all_orders` | Cancel all orders for a pair | `exchange`, `symbol` |
 | **Cardano DEX** |
 | `get_cardano_price` | Aggregated token price from DEXes | `symbol` |
-| `discover_pools` | Discover liquidity pools | `symbol`, `minLiquidity?` |
+| `discover_pools` | Discover direct ADA pools via Minswap and SundaeSwap | `symbol` |
 | **Strategy** |
 | `start_grid_strategy` | Start grid trading | `exchange`, `symbol`, `lowerPrice`, `upperPrice`, `gridLevels?`, `totalAmount` |
 | `stop_strategy` | Stop a running strategy | `strategyId`, `cancelOrders?` |
