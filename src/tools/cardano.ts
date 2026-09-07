@@ -27,7 +27,10 @@ const SUPPORTED_TOKENS: Record<
   },
 };
 
-const IRIS_BASE_URL = 'https://iris.indigoprotocol.io';
+const MINSWAP_POOLS_URL = 'https://api-mainnet-prod.minswap.org/v1/pools/metrics';
+const SUNDAESWAP_GRAPHQL_URL = 'https://api.sundae.fi/graphql';
+const ADA_ASSET_ID = 'ada.lovelace';
+const PROVIDER_TIMEOUT_MS = 10000;
 
 const CEX_ENDPOINTS = [
   {
@@ -47,6 +50,72 @@ const CEX_ENDPOINTS = [
   },
 ];
 
+const assetMetadataSchema = z.object({
+  currency_symbol: z.string(),
+  token_name: z.string(),
+});
+
+const minswapPoolSchema = z.object({
+  lp_asset: assetMetadataSchema,
+  type: z.string().min(1),
+  asset_a: assetMetadataSchema,
+  asset_b: assetMetadataSchema,
+  liquidity_a: z.number().finite().positive(),
+  liquidity_b: z.number().finite().positive(),
+});
+
+const minswapResponseSchema = z.object({
+  pool_metrics: z.array(z.unknown()),
+});
+
+const sundaeAssetAmountSchema = z.object({
+  quantity: z.string().regex(/^\d+$/),
+  asset: z.object({
+    id: z.string().min(1),
+    decimals: z.number().int().min(0).max(255),
+  }),
+});
+
+const sundaePoolSchema = z.object({
+  id: z.string().min(1),
+  version: z.string().min(1),
+  current: z.object({
+    quantityA: sundaeAssetAmountSchema,
+    quantityB: sundaeAssetAmountSchema,
+  }),
+});
+
+const sundaeResponseSchema = z.object({
+  data: z.object({
+    pools: z.object({
+      byAsset: z.array(z.unknown()),
+    }),
+  }),
+  errors: z.array(z.object({ message: z.string().optional() }).passthrough()).optional(),
+});
+
+interface NormalizedPool {
+  identifier: string;
+  dex: 'minswap' | 'sundaeswap';
+  tvl: number;
+  reserveA: number;
+  reserveB: number;
+  price: number;
+  isActive: true;
+}
+
+type ProviderErrorCategory = 'http' | 'network' | 'payload';
+
+class ProviderError extends Error {
+  constructor(
+    readonly provider: 'Minswap' | 'SundaeSwap',
+    readonly category: ProviderErrorCategory,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
 async function fetchADAUSDT(): Promise<{ price: number; sources: string[] }> {
   const prices: number[] = [];
   const sources: string[] = [];
@@ -57,12 +126,12 @@ async function fetchADAUSDT(): Promise<{ price: number; sources: string[] }> {
       if (!resp.ok) continue;
       const data = await resp.json();
       const price = endpoint.parse(data);
-      if (price > 0 && !isNaN(price)) {
+      if (Number.isFinite(price) && price > 0) {
         prices.push(price);
         sources.push(endpoint.name);
       }
     } catch {
-      // skip failed endpoint
+      // A single CEX failure must not prevent fallback to the remaining sources.
     }
   }
 
@@ -70,76 +139,294 @@ async function fetchADAUSDT(): Promise<{ price: number; sources: string[] }> {
     throw new Error('Failed to fetch ADA/USDT price from any CEX source');
   }
 
-  return {
-    price: prices.reduce((sum, p) => sum + p, 0) / prices.length,
-    sources,
-  };
-}
-
-/** Asset as returned by the Iris API. Native tokens carry a policyId; ADA does not. */
-interface IrisAsset {
-  policyId?: string;
-  nameHex?: string;
-  decimals?: number;
-}
-
-interface IrisPoolState {
-  tvl?: number;
-  price?: number;
-  reserveA?: number | string;
-  reserveB?: number | string;
-}
-
-/**
- * Liquidity pool as returned by the Iris API.
- *
- * Every field is optional: Iris varies its shape across DEXes, and the token
- * pair arrives either nested under `pair` or flattened onto the pool itself.
- */
-interface IrisPool {
-  identifier?: string;
-  dex?: string;
-  isActive?: boolean;
-  state?: IrisPoolState;
-  pair?: { tokenA?: IrisAsset; tokenB?: IrisAsset };
-  tokenA?: IrisAsset;
-  tokenB?: IrisAsset;
-}
-
-async function fetchIrisPools(): Promise<IrisPool[]> {
-  const resp = await fetch(`${IRIS_BASE_URL}/api/liquidity-pools`, {
-    headers: { 'User-Agent': 'OpenMM-MCP-Agent/1.0' },
-    signal: AbortSignal.timeout(10000),
+  let average = 0;
+  prices.forEach((price, index) => {
+    average += (price - average) / (index + 1);
   });
-  if (!resp.ok) {
-    throw new Error(`Iris API error: ${resp.status}`);
+  if (!Number.isFinite(average) || average <= 0) {
+    throw new Error('Failed to calculate a valid ADA/USDT price');
   }
-  const data = (await resp.json()) as { data?: IrisPool[] } | IrisPool[] | null;
-  if (Array.isArray(data)) return data;
-  return data?.data ?? [];
+
+  return { price: average, sources };
 }
 
-async function fetchIrisPrices(identifiers: string[]): Promise<number[]> {
-  const resp = await fetch(`${IRIS_BASE_URL}/api/liquidity-pools/prices`, {
+async function fetchProviderJson(
+  provider: 'Minswap' | 'SundaeSwap',
+  url: string,
+  init: RequestInit
+): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetch(url, { ...init, signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'request failed';
+    throw new ProviderError(provider, 'network', message);
+  }
+
+  if (!response.ok) {
+    throw new ProviderError(provider, 'http', `HTTP ${response.status}`);
+  }
+
+  try {
+    return await response.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'invalid JSON';
+    throw new ProviderError(provider, 'payload', message);
+  }
+}
+
+function assetId(policyId: string, assetName: string): string {
+  return `${policyId}.${assetName}`;
+}
+
+function isMinswapAda(asset: z.infer<typeof assetMetadataSchema>): boolean {
+  return asset.currency_symbol === '' && asset.token_name === '';
+}
+
+function isMinswapToken(
+  asset: z.infer<typeof assetMetadataSchema>,
+  policyId: string,
+  tokenName: string
+): boolean {
+  return asset.currency_symbol === policyId && asset.token_name === tokenName;
+}
+
+function assertPositiveFinite(value: number, field: string): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${field} must be finite and positive`);
+  }
+  return value;
+}
+
+async function fetchMinswapPools(policyId: string, tokenName: string): Promise<NormalizedPool[]> {
+  const raw = await fetchProviderJson('Minswap', MINSWAP_POOLS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': 'OpenMM-MCP-Agent/1.0' },
-    body: JSON.stringify({ identifiers }),
-    signal: AbortSignal.timeout(10000),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      term: `${policyId}${tokenName}`,
+      only_verified: false,
+      limit: 100,
+      sort_field: 'liquidity',
+      sort_direction: 'desc',
+    }),
   });
-  if (!resp.ok) {
-    throw new Error(`Iris prices API error: ${resp.status}`);
+
+  const parsed = minswapResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ProviderError(
+      'Minswap',
+      'payload',
+      parsed.error.issues[0]?.message ?? 'invalid payload'
+    );
   }
-  const data = await resp.json();
-  if (!Array.isArray(data)) return [];
-  return data
-    .map((entry: { price: string }) => parseFloat(entry.price))
-    .filter((p: number) => p > 0);
+
+  let validEntries = 0;
+  const pools: NormalizedPool[] = [];
+  for (const value of parsed.data.pool_metrics) {
+    const parsedPool = minswapPoolSchema.safeParse(value);
+    if (!parsedPool.success) continue;
+    const pool = parsedPool.data;
+    try {
+      const adaIsA = isMinswapAda(pool.asset_a);
+      const adaIsB = isMinswapAda(pool.asset_b);
+      const tokenIsA = isMinswapToken(pool.asset_a, policyId, tokenName);
+      const tokenIsB = isMinswapToken(pool.asset_b, policyId, tokenName);
+      if (!((adaIsA && tokenIsB) || (adaIsB && tokenIsA))) {
+        validEntries += 1;
+        continue;
+      }
+
+      const adaReserve = adaIsA ? pool.liquidity_a : pool.liquidity_b;
+      const tokenReserve = tokenIsA ? pool.liquidity_a : pool.liquidity_b;
+      const tvl = assertPositiveFinite(adaReserve * 2, 'Minswap TVL');
+      const price = assertPositiveFinite(adaReserve / tokenReserve, 'Minswap price');
+      const identifier = `${pool.lp_asset.currency_symbol}${pool.lp_asset.token_name}`;
+      if (!identifier) throw new Error('LP asset identifier is empty');
+
+      pools.push({
+        identifier,
+        dex: 'minswap',
+        tvl,
+        reserveA: tokenReserve,
+        reserveB: adaReserve,
+        price,
+        isActive: true,
+      });
+      validEntries += 1;
+    } catch {
+      // Skip one malformed pool without discarding valid siblings.
+    }
+  }
+  if (parsed.data.pool_metrics.length > 0 && validEntries === 0) {
+    throw new ProviderError('Minswap', 'payload', 'no valid pool entries');
+  }
+  return pools;
 }
 
-function matchesToken(pool: IrisPool, policyId: string): boolean {
-  const tokenA = pool.pair?.tokenA || pool.tokenA;
-  const tokenB = pool.pair?.tokenB || pool.tokenB;
-  return tokenA?.policyId === policyId || tokenB?.policyId === policyId;
+function normalizeRawQuantity(quantity: string, decimals: number): number {
+  if (!/^\d+$/.test(quantity) || /^0+$/.test(quantity)) {
+    throw new Error('quantity must be a positive integer string');
+  }
+
+  const significant = quantity.replace(/^0+/, '');
+  const exponent = significant.length - decimals - 1;
+  const precision =
+    significant.length === 1 ? significant : `${significant[0]}.${significant.slice(1)}`;
+  return assertPositiveFinite(Number(`${precision}e${exponent}`), 'normalized quantity');
+}
+
+async function fetchSundaeSwapPools(
+  policyId: string,
+  tokenName: string
+): Promise<NormalizedPool[]> {
+  const tokenAssetId = assetId(policyId, tokenName);
+  const raw = await fetchProviderJson('SundaeSwap', SUNDAESWAP_GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `query PoolsByAsset($asset: ID!) {
+        pools {
+          byAsset(asset: $asset) {
+            id
+            version
+            current {
+              quantityA { quantity asset { id decimals } }
+              quantityB { quantity asset { id decimals } }
+            }
+          }
+        }
+      }`,
+      variables: { asset: tokenAssetId },
+    }),
+  });
+
+  const parsed = sundaeResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ProviderError(
+      'SundaeSwap',
+      'payload',
+      parsed.error.issues[0]?.message ?? 'invalid payload'
+    );
+  }
+  if (parsed.data.errors?.length) {
+    throw new ProviderError(
+      'SundaeSwap',
+      'payload',
+      parsed.data.errors.map((error) => error.message ?? 'GraphQL error').join('; ')
+    );
+  }
+
+  let validEntries = 0;
+  const pools: NormalizedPool[] = [];
+  for (const value of parsed.data.data.pools.byAsset) {
+    const parsedPool = sundaePoolSchema.safeParse(value);
+    if (!parsedPool.success) continue;
+    const pool = parsedPool.data;
+    const amountA = pool.current.quantityA;
+    const amountB = pool.current.quantityB;
+    const adaAmount = amountA.asset.id === ADA_ASSET_ID ? amountA : amountB;
+    const tokenAmount = amountA.asset.id === tokenAssetId ? amountA : amountB;
+    const hasDirectPair =
+      [amountA.asset.id, amountB.asset.id].includes(ADA_ASSET_ID) &&
+      [amountA.asset.id, amountB.asset.id].includes(tokenAssetId);
+    if (!hasDirectPair) {
+      validEntries += 1;
+      continue;
+    }
+
+    try {
+      const adaReserve = normalizeRawQuantity(adaAmount.quantity, adaAmount.asset.decimals);
+      const tokenReserve = normalizeRawQuantity(tokenAmount.quantity, tokenAmount.asset.decimals);
+      const tvl = assertPositiveFinite(adaReserve * 2, 'SundaeSwap TVL');
+      const price = assertPositiveFinite(adaReserve / tokenReserve, 'SundaeSwap price');
+
+      pools.push({
+        identifier: pool.id,
+        dex: 'sundaeswap',
+        tvl,
+        reserveA: tokenReserve,
+        reserveB: adaReserve,
+        price,
+        isActive: true,
+      });
+      validEntries += 1;
+    } catch {
+      continue;
+    }
+  }
+  if (parsed.data.data.pools.byAsset.length > 0 && validEntries === 0) {
+    throw new ProviderError('SundaeSwap', 'payload', 'no valid pool entries');
+  }
+  return pools;
+}
+
+function providerFailure(reason: unknown): string {
+  if (reason instanceof ProviderError) {
+    return `${reason.provider} [${reason.category}]: ${reason.message}`;
+  }
+  const message = reason instanceof Error ? reason.message : String(reason);
+  return `unknown [payload]: ${message}`;
+}
+
+async function discoverTokenPools(policyId: string, tokenName: string): Promise<NormalizedPool[]> {
+  const results = await Promise.allSettled([
+    fetchMinswapPools(policyId, tokenName),
+    fetchSundaeSwapPools(policyId, tokenName),
+  ]);
+  const pools = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+
+  if (results.every((result) => result.status === 'rejected')) {
+    const failures = results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => providerFailure(result.reason));
+    throw new Error(`Failed to fetch Cardano DEX pools: ${failures.join('; ')}`);
+  }
+
+  const deduplicated = new Map<string, NormalizedPool>();
+  for (const pool of pools) {
+    const key = `${pool.dex}:${pool.identifier}`;
+    const existing = deduplicated.get(key);
+    if (!existing || pool.tvl > existing.tvl) deduplicated.set(key, pool);
+  }
+
+  return [...deduplicated.values()].sort(
+    (a, b) =>
+      b.tvl - a.tvl || a.dex.localeCompare(b.dex) || a.identifier.localeCompare(b.identifier)
+  );
+}
+
+function weightedPrice(pools: NormalizedPool[]): number {
+  const maxTvl = Math.max(...pools.map((pool) => pool.tvl));
+  let scaledWeightTotal = 0;
+  let price = 0;
+  for (const pool of pools) {
+    const scaledWeight = pool.tvl / maxTvl;
+    const nextWeightTotal = scaledWeightTotal + scaledWeight;
+    price += (pool.price - price) * (scaledWeight / nextWeightTotal);
+    scaledWeightTotal = nextWeightTotal;
+  }
+  return assertPositiveFinite(price, 'weighted token price');
+}
+
+function poolConfidence(pools: NormalizedPool[]): number {
+  if (new Set(pools.map((pool) => pool.dex)).size === 1) return 0.7;
+  const prices = pools.map((pool) => pool.price);
+  const minimum = Math.min(...prices);
+  const maximum = Math.max(...prices);
+  const midpoint = minimum / 2 + maximum / 2;
+  const relativeSpread = midpoint > 0 ? (maximum - minimum) / midpoint : 1;
+  return Math.max(0.5, 0.9 - Math.min(relativeSpread, 0.4));
+}
+
+function supportedToken(symbol: string) {
+  const upper = symbol.toUpperCase();
+  const token = SUPPORTED_TOKENS[upper];
+  if (!token) {
+    throw new Error(
+      `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
+    );
+  }
+  return { upper, token };
 }
 
 export function registerCardanoTools(server: McpServer): void {
@@ -150,50 +437,22 @@ export function registerCardanoTools(server: McpServer): void {
       symbol: z.string().describe('Cardano token symbol (INDY, SNEK, MIN, NIGHT)'),
     },
     async ({ symbol }) => {
-      const upper = symbol.toUpperCase();
-      const token = SUPPORTED_TOKENS[upper];
-      if (!token) {
-        throw new Error(
-          `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
-        );
-      }
-
-      const [adaPrice, allPools] = await Promise.all([fetchADAUSDT(), fetchIrisPools()]);
-
-      const tokenPools = allPools
-        .filter((p) => matchesToken(p, token.policyId))
-        .filter((p) => (p.state?.tvl || 0) >= token.minLiquidity)
-        .sort((a, b) => (b.state?.tvl || 0) - (a.state?.tvl || 0))
-        .slice(0, 3);
+      const { upper, token } = supportedToken(symbol);
+      const [adaPrice, allPools] = await Promise.all([
+        fetchADAUSDT(),
+        discoverTokenPools(token.policyId, token.assetName),
+      ]);
+      const tokenPools = allPools.filter((pool) => pool.tvl >= token.minLiquidity).slice(0, 3);
 
       if (tokenPools.length === 0) {
         throw new Error(`No liquidity pools found for ${upper} above minimum TVL threshold`);
       }
 
-      const identifiers = tokenPools
-        .map((p) => p.identifier)
-        .filter((id): id is string => Boolean(id));
-      let tokenAdaPrice: number;
-
-      if (identifiers.length > 0) {
-        const prices = await fetchIrisPrices(identifiers);
-        if (prices.length > 0) {
-          const totalTvl = tokenPools.reduce((sum, p) => sum + (p.state?.tvl || 0), 0);
-          tokenAdaPrice = tokenPools.reduce((sum, p, i) => {
-            const weight = (p.state?.tvl || 0) / totalTvl;
-            return sum + (prices[i] || 0) * weight;
-          }, 0);
-        } else {
-          tokenAdaPrice =
-            tokenPools.reduce((sum, p) => sum + (p.state?.price || 0), 0) / tokenPools.length;
-        }
-      } else {
-        tokenAdaPrice =
-          tokenPools.reduce((sum, p) => sum + (p.state?.price || 0), 0) / tokenPools.length;
-      }
-
-      const tokenUsdtPrice = tokenAdaPrice * adaPrice.price;
-      const confidence = Math.min(tokenPools.length / 3, 1);
+      const tokenAdaPrice = weightedPrice(tokenPools);
+      const tokenUsdtPrice = assertPositiveFinite(
+        tokenAdaPrice * adaPrice.price,
+        'token USDT price'
+      );
 
       return {
         content: [
@@ -205,14 +464,11 @@ export function registerCardanoTools(server: McpServer): void {
                 price: tokenUsdtPrice,
                 tokenAdaPrice,
                 adaUsdtPrice: adaPrice.price,
-                confidence,
+                confidence: poolConfidence(tokenPools),
                 poolsUsed: tokenPools.length,
                 sources: {
                   ada: adaPrice.sources,
-                  pools: tokenPools.map((p) => ({
-                    dex: p.dex || 'unknown',
-                    tvl: p.state?.tvl,
-                  })),
+                  pools: tokenPools.map((pool) => ({ dex: pool.dex, tvl: pool.tvl })),
                 },
                 timestamp: new Date().toISOString(),
               },
@@ -227,23 +483,13 @@ export function registerCardanoTools(server: McpServer): void {
 
   server.tool(
     'discover_pools',
-    'Discover Cardano DEX liquidity pools for a native token via Iris API',
+    'Discover direct ADA liquidity pools for a Cardano native token via Minswap and SundaeSwap',
     {
       symbol: z.string().describe('Cardano token symbol (INDY, SNEK, MIN, NIGHT)'),
     },
     async ({ symbol }) => {
-      const upper = symbol.toUpperCase();
-      const token = SUPPORTED_TOKENS[upper];
-      if (!token) {
-        throw new Error(
-          `Unsupported token: ${symbol}. Supported: ${Object.keys(SUPPORTED_TOKENS).join(', ')}`
-        );
-      }
-
-      const allPools = await fetchIrisPools();
-      const tokenPools = allPools
-        .filter((p) => matchesToken(p, token.policyId))
-        .sort((a, b) => (b.state?.tvl || 0) - (a.state?.tvl || 0));
+      const { upper, token } = supportedToken(symbol);
+      const tokenPools = await discoverTokenPools(token.policyId, token.assetName);
 
       return {
         content: [
@@ -253,15 +499,7 @@ export function registerCardanoTools(server: McpServer): void {
               {
                 symbol: upper,
                 totalPools: tokenPools.length,
-                pools: tokenPools.map((p) => ({
-                  identifier: p.identifier,
-                  dex: p.dex || 'unknown',
-                  tvl: p.state?.tvl || 0,
-                  reserveA: p.state?.reserveA || 0,
-                  reserveB: p.state?.reserveB || 0,
-                  price: p.state?.price || null,
-                  isActive: p.isActive !== false,
-                })),
+                pools: tokenPools,
                 timestamp: new Date().toISOString(),
               },
               null,
